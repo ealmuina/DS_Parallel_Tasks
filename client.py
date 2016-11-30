@@ -1,8 +1,13 @@
-import threading, time, socket
-import Pyro4
-import node, log
+import socket
+import threading
+import time
 from queue import PriorityQueue
+
+import Pyro4
 from Pyro4 import socketutil as pyrosocket
+
+import log
+import node
 
 
 class Client:

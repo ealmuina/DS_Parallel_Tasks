@@ -1,7 +1,10 @@
-import threading, socket
+import socket
+import threading
+
 import Pyro4
-import log
 from Pyro4 import socketutil as pyrosocket
+
+import log
 
 
 @Pyro4.expose
