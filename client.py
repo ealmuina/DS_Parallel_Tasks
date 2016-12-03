@@ -5,9 +5,11 @@ from queue import PriorityQueue
 
 import Pyro4
 from Pyro4 import socketutil as pyrosocket
+from Pyro4.errors import PyroError
 
 import log
 import node
+import utils
 
 
 class Client:
@@ -21,9 +23,10 @@ class Client:
         self.lock = threading.Lock()  # Lock para el uso de 'self.nodes'
         self.log = log.Log('client')
 
-        # daemon = Pyro4.Daemon(host=socket.gethostname())
-        # self.uri = daemon.register(self)
-        # threading.Thread(target=daemon.requestLoop).start()
+        daemon = Pyro4.Daemon(host=utils.get_ip())
+        self.uri = daemon.register(self)
+        threading.Thread(target=daemon.requestLoop).start()
+
         threading.Thread(target=self._scan_loop).start()
 
         self.log.report('Cliente inicializado.')
@@ -46,14 +49,17 @@ class Client:
                 while True:
                     data, address = scanner.recvfrom(1024)
                     uri = data.decode()
-                    _node = Pyro4.Proxy(uri)
-                    updated_nodes.put((_node.get_load(), _node))
-                    updated_nodes_list.append((_node.get_load(), _node))
-
+                    try:
+                        _node = Pyro4.Proxy(uri)
+                        updated_nodes.put((_node.get_load(), _node))
+                        updated_nodes_list.append((_node.get_load(), _node))
+                    except PyroError:
+                        # Si los datos recibidos no son una uri válida, al tratar de crear el proxy,
+                        # esta excepción es lanzada.
+                        continue
             except socket.timeout:
-                self.lock.acquire()
-                self.nodes = updated_nodes
-                self.lock.release()
+                with self.lock:
+                    self.nodes = updated_nodes
 
                 self.log.report('Sistema escaneado. La cola de nodos es ahora:\n{0}.'.format(updated_nodes_list))
                 time.sleep(Client.SCANNER_INTERVAL)
@@ -68,14 +74,25 @@ class Client:
 
     def mult(self, a, b):
         """Multiplica dos matrices."""
+
+        # Función que calcula la sumatoria del producto componente a componente de dos vectores
+        def func(v1, v2):
+            result = 0
+            for i in range(len(v1)):
+                result += v1[i] * v2[i]
+            return result
+
         pass
+        # TODO Continuar
 
     def join_to_system(self):
         """Integra el equipo al sistema distribuido."""
+        self.node.join_to_system()
         self.connected = True
 
     def leave_system(self):
         """Se desconecta del sistema distribuido."""
+        self.node.leave_system()
         self.connected = False
 
 
