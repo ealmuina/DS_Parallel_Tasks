@@ -27,10 +27,10 @@ class Node:
         """Retorna la carga de trabajos pendientes del nodo."""
         return self.load
 
-    def process(self, data, func, client_uri):
+    def process(self, task_id, data, func, client_uri):
         """Agrega la tarea de evaluar func en data a la cola de tareas pendientes."""
         self.load += 1
-        self.pending_tasks.put((data, func, client_uri))
+        self.pending_tasks.put((task_id, data, func, client_uri))
 
     def join_to_system(self):
         """Integra el equipo al sistema distribuido."""
@@ -51,8 +51,12 @@ class Node:
                 listener.sendto(self.uri.encode(), address)
 
     def _process_loop(self):
-        """Procesa las tareas pendientes y las entrega los clientes que las solicitaron."""
-        pass
+        """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""
+        while True:
+            task_id, data, func, client_uri = self.pending_tasks.get()
+            result = func(data)
+            client = Pyro4.Proxy(client_uri)
+            client.get_report(task_id, result)
 
 
 if __name__ == '__main__':
