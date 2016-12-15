@@ -4,6 +4,7 @@ from queue import Queue
 
 import Pyro4
 from Pyro4 import socketutil as pyrosocket
+from Pyro4.errors import PyroError
 
 import log
 import matrix
@@ -28,7 +29,7 @@ class Node:
         for i in range(os.cpu_count()):
             threading.Thread(target=self._process_loop).start()
 
-        self.log.report('Nodo inicializado con %d hilos procesando solicitudes.' % os.cpu_count())
+        self.log.report('Nodo inicializado con %d hilos procesando solicitudes.' % os.cpu_count(), True)
 
     def get_load(self):
         """Retorna la carga de trabajos pendientes del nodo."""
@@ -68,14 +69,19 @@ class Node:
             if func == '+':
                 func = matrix.vector_add
             elif func == '-':
-                pass
+                func = matrix.vector_sub
             elif func == '*':
-                pass
+                func = matrix.vector_mult
 
             result = func(data)
-            client = Pyro4.Proxy(client_uri)
-            client.get_report(subtask_id, result)
+            try:
+                client = Pyro4.Proxy(client_uri)
+                client.get_report(subtask_id, result)
+            except PyroError:
+                self.log.report('La operación con id %s fue completada, pero el cliente no pudo ser localizado.',
+                                True, 'red')
 
 
 if __name__ == '__main__':
-    pass
+    node = Node()
+    node.join_to_system()

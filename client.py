@@ -16,6 +16,7 @@ import utils
 from task import Task, Subtask
 
 
+@Pyro4.expose
 class Client:
     SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de nodos
     SCANNER_INTERVAL = 10  # Tiempo (segundos) entre escaneos del sistema
@@ -42,7 +43,7 @@ class Client:
         threading.Thread(target=self._scan_loop).start()
         threading.Thread(target=self._subtasks_checker_loop).start()
 
-        self.log.report('Cliente inicializado.')
+        self.log.report('Cliente inicializado.', True)
 
     def _scan_loop(self):
         """Escanea la red en busca de nodos y actualiza una cola con prioridad según la carga de estos."""
@@ -108,15 +109,16 @@ class Client:
                     st.time = datetime.now()
                     try:
                         n.process(st.data, st.func, (st.task.id, st.index), self.uri)
-                        heapq.heappush(self.nodes, (load + 1, uri, n))
+                        heapq.heappush(self.nodes, (n.get_load(), uri, n))
                         self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
                     except PyroError:
-                        self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri)
+                        self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,
+                                        True, 'red')
 
             self.pending_subtasks.put((st.time, st))
 
-    def add(self, a, b):
-        """Adiciona dos matrices."""
+    def _add_sub(self, a, b, subtract=False):
+        """Adiciona o resta dos matrices"""
 
         if len(a) != len(b):
             raise ArithmeticError('Las dimensiones de las matrices deben coincidir.')
@@ -128,13 +130,19 @@ class Client:
 
         # Crear subtareas para la suma de las filas correspondientes en las matrices
         for i in range(len(a)):
-            st = Subtask(task, i, (a[i], b[i]), '+')
+            st = Subtask(task, i, (a[i], b[i]), '-' if subtract else '+')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
+    def add(self, a, b):
+        """Adiciona dos matrices."""
+
+        self._add_sub(a, b)
+
     def sub(self, a, b):
         """Resta dos matrices."""
-        pass
+
+        self._add_sub(a, b, True)
 
     def mult(self, a, b):
         """Multiplica dos matrices."""
@@ -185,14 +193,49 @@ class Client:
         # Si la tarea se completó, reportar resultado y eliminarla de la lista de tareas pendientes
         if current_task.completed:
             self.log.report('Resultado de la tarea %s:\n %s \nTiempo total: %s' % (
-                current_task.id, current_task.result, datetime.now() - current_task.time))
+                current_task.id, current_task.result, datetime.now() - current_task.time), True, 'green')
             self.pending_tasks.remove(current_task)
+
+
+def print_console_error(message):
+    print('\x1b[0;31;48m' + message + '\x1b[0m')
 
 
 if __name__ == '__main__':
     client = Client()
     client.join_to_system()
 
-    a = matrix.get_random_matrix(1000, 150)
-    b = matrix.get_random_matrix(1000, 150)
-    client.add(a, b)
+    # a = matrix.get_random_matrix(1000, 1050)
+    # b = matrix.get_random_matrix(1000, 1050)
+    # client.add(a, b)  # En la pc sola tarda 28 segundos
+
+    while True:
+        command = input().split()
+
+        if command[0] == 'exec':
+            try:
+                function, values_file = command[1:]
+                a, b = matrix.load_matrices(values_file)
+
+                if function == 'add':
+                    client.add(a, b)
+
+                elif function == 'subtract':
+                    client.sub(a, b)
+
+                elif function == 'product':
+                    client.mult(a, b)
+
+                else:
+                    print_console_error('Función incorrecta.')
+
+            except ValueError:
+                print_console_error('Cantidad de argumentos incorrecta.')
+                print_console_error('La sintaxis es: exec <function> <values_file>.txt')
+
+        elif command[0] == 'stats':
+            # TODO Implementar los requerimientos para poder ejecutar el comando 'stats'
+            pass
+
+        else:
+            print_console_error('No se reconoce el comando %s.' % command[0])
