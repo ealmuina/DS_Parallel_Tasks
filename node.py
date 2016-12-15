@@ -13,6 +13,7 @@ class Node:
     def __init__(self):
         self.log = log.Log('node')
         self.load = 0
+        self.lock = threading.Lock()
         self.connected = False
         self.pending_tasks = Queue()
 
@@ -27,10 +28,11 @@ class Node:
         """Retorna la carga de trabajos pendientes del nodo."""
         return self.load
 
-    def process(self, task_id, data, func, client_uri):
-        """Agrega la tarea de evaluar func en data a la cola de tareas pendientes."""
-        self.load += 1
-        self.pending_tasks.put((task_id, data, func, client_uri))
+    def process(self, data, func, subtask_id, client_uri):
+        """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
+        with self.lock:
+            self.load += 1
+        self.pending_tasks.put((data, func, subtask_id, client_uri))
 
     def join_to_system(self):
         """Integra el equipo al sistema distribuido."""
@@ -53,10 +55,29 @@ class Node:
     def _process_loop(self):
         """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""
         while True:
-            task_id, data, func, client_uri = self.pending_tasks.get()
+            data, func, subtask_id, client_uri = self.pending_tasks.get()
+            with self.lock:
+                self.load -= 1
+
+            if func == '+':
+                func = Node._add
+            elif func == '-':
+                pass
+            elif func == '*':
+                pass
+
             result = func(data)
             client = Pyro4.Proxy(client_uri)
-            client.get_report(task_id, result)
+            client.get_report(subtask_id, result)
+
+    @staticmethod
+    def _add(data):
+        """Adiciona dos vectores de igual dimensión, componente a componente."""
+        x, y = data
+        result = []
+        for i in range(len(x)):
+            result.append(x[i] + y[i])
+        return result
 
 
 if __name__ == '__main__':
