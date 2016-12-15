@@ -192,8 +192,13 @@ class Client:
 
         # Si la tarea se completó, reportar resultado y eliminarla de la lista de tareas pendientes
         if current_task.completed:
-            self.log.report('Resultado de la tarea %s:\n %s \nTiempo total: %s' % (
-                current_task.id, current_task.result, datetime.now() - current_task.time), True, 'green')
+            # Guardar el resultado de la tarea en el archivo <current_task.id>.txt
+            file_result = open('results/%s.txt' % current_task.id, 'w')
+            file_result.write(matrix.str_matrix(current_task.result))
+
+            self.log.report(
+                'Tarea %(id)s completada. Puede ver el resultado en el archivo %(id)s.txt.\nTiempo total: %(time)s'
+                % {'id': current_task.id, 'time': datetime.now() - current_task.time}, True, 'green')
             self.pending_tasks.remove(current_task)
 
 
@@ -204,10 +209,6 @@ def print_console_error(message):
 if __name__ == '__main__':
     client = Client()
     client.join_to_system()
-
-    # a = matrix.get_random_matrix(1000, 1050)
-    # b = matrix.get_random_matrix(1000, 1050)
-    # client.add(a, b)  # En la pc sola tarda 28 segundos
 
     while True:
         command = input().split()

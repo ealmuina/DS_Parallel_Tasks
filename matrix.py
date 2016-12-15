@@ -10,7 +10,13 @@ def get_random_matrix(n, m):
 
 
 def str_matrix(a):
-    pass
+    s = ''
+    for i in range(len(a)):
+        for j in range(len(a[i])):
+            s += str(a[i][j]) + ' '
+        if i != len(a) - 1:
+            s += '\n'
+    return s
 
 
 def _vector_add_sub(data, subtract=False):
@@ -36,6 +42,7 @@ def vector_sub(data):
 
 
 def vector_mult(data):
+    # TODO Implementar
     pass
 
 
