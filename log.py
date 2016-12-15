@@ -1,5 +1,11 @@
 from datetime import datetime
 
+try:
+    from colorama import init
+except ImportError:
+    def init():
+        pass
+
 
 class Log:
     def __init__(self, name):
@@ -20,5 +26,7 @@ class Log:
 
 
 if __name__ == '__main__':
+    init()  # Si el módulo 'colorama' se encuentra instalado, permite el uso de colores en la consola de Windows
+
     log = Log('test')
     log.report('testing.')
