@@ -10,6 +10,7 @@ from Pyro4 import socketutil as pyrosocket
 from Pyro4.errors import PyroError
 
 import log
+import matrix
 import node
 import utils
 from task import Task, Subtask
@@ -18,7 +19,7 @@ from task import Task, Subtask
 class Client:
     SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de nodos
     SCANNER_INTERVAL = 10  # Tiempo (segundos) entre escaneos del sistema
-    SUBTASKS_TIMEOUT = 10  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un nodo
+    SUBTASKS_TIMEOUT = 30  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un nodo
 
     def __init__(self):
         self.nodes = []  # Nodos accesibles, priorizados según su carga
@@ -62,11 +63,14 @@ class Client:
                     uri = data.decode()
                     try:
                         current_node = Pyro4.Proxy(uri)
-                        updated_nodes.append((current_node.get_load(), current_node))
+                        updated_nodes.append((current_node.get_load(), uri, current_node))
+                        # *** Se añadió la uri a la tupla para evitar excepción en el heapify si dos nodos
+                        # *** tienen la misma prioridad
                     except PyroError:
                         # Si los datos recibidos no son una uri válida, al tratar de crear el proxy,
                         # esta excepción es lanzada.
                         continue
+
             except socket.timeout:
                 heapq.heapify(updated_nodes)
                 with self.lock:
@@ -74,8 +78,12 @@ class Client:
                     for n in updated_nodes:
                         self.nodes.append(n)
 
-                self.log.report('Sistema escaneado. La cola de nodos es ahora:\n%s.' % updated_nodes)
-                time.sleep(Client.SCANNER_INTERVAL)
+            except OSError:
+                # La red fue desconectada. Intentar de nuevo
+                continue
+
+            self.log.report('Sistema escaneado. Se detectaron %d nodos.' % len(updated_nodes))
+            time.sleep(Client.SCANNER_INTERVAL)
 
     def _subtasks_checker_loop(self):
         """Chequea si ha expirado el tiempo de espera por el resultado de alguna operacion.
@@ -96,10 +104,14 @@ class Client:
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
                 # Tiempo de espera superado, asignar operacion a un nuevo nodo
                 with self.lock:
-                    load, n = heapq.heappop(self.nodes)
+                    load, uri, n = heapq.heappop(self.nodes)
                     st.time = datetime.now()
-                    n.process(st.data, st.func, (st.task.id, st.index), self.uri)
-                    heapq.heappush(self.nodes, (load + 1, n))
+                    try:
+                        n.process(st.data, st.func, (st.task.id, st.index), self.uri)
+                        heapq.heappush(self.nodes, (load + 1, uri, n))
+                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
+                    except PyroError:
+                        self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri)
 
             self.pending_subtasks.put((st.time, st))
 
@@ -108,9 +120,6 @@ class Client:
 
         if len(a) != len(b):
             raise ArithmeticError('Las dimensiones de las matrices deben coincidir.')
-
-        a = [[1, 2], [3, 4]]  # TODO Debugging lines
-        b = [[8, 7], [6, 5]]
 
         # Crear nueva tarea
         task = Task(len(a), self.task_number)
@@ -153,8 +162,14 @@ class Client:
     def get_report(self, subtask_id, result):
         """Reporta al cliente el resultado de una operacion solicitada por este a uno de los nodos del sistema."""
 
-        # Localizar la subtarea correspondiente al id y marcarla como completada
-        subtask = self.pending_subtasks_dic.pop(subtask_id)
+        # Localizar la subtarea correspondiente al id y marcarla como completada.
+        # Si no se encuentra la subtarea, entonces ya fue resuelta. Terminar el llamado al método.
+        try:
+            subtask = self.pending_subtasks_dic.pop(subtask_id)
+        except KeyError:
+            self.log.report('Un nodo reportó el resultado de una operación ya completada. La respuesta será desechada.')
+            return None
+
         subtask.completed = True
 
         current_task = subtask.task
@@ -169,7 +184,8 @@ class Client:
 
         # Si la tarea se completó, reportar resultado y eliminarla de la lista de tareas pendientes
         if current_task.completed:
-            self.log.report('Resultado de la tarea %s:\n %s' % (current_task.id, current_task.result))
+            self.log.report('Resultado de la tarea %s:\n %s \nTiempo total: %s' % (
+                current_task.id, current_task.result, datetime.now() - current_task.time))
             self.pending_tasks.remove(current_task)
 
 
@@ -177,4 +193,6 @@ if __name__ == '__main__':
     client = Client()
     client.join_to_system()
 
-    client.add('a', 'a')
+    a = matrix.get_random_matrix(1000, 150)
+    b = matrix.get_random_matrix(1000, 150)
+    client.add(a, b)

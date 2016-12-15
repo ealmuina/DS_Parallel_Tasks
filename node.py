@@ -1,3 +1,4 @@
+import os
 import threading
 from queue import Queue
 
@@ -5,6 +6,7 @@ import Pyro4
 from Pyro4 import socketutil as pyrosocket
 
 import log
+import matrix
 import utils
 
 
@@ -22,7 +24,11 @@ class Node:
         threading.Thread(target=daemon.requestLoop).start()
 
         threading.Thread(target=self._listen_loop).start()
-        threading.Thread(target=self._process_loop).start()
+
+        for i in range(os.cpu_count()):
+            threading.Thread(target=self._process_loop).start()
+
+        self.log.report('Nodo inicializado con %d hilos procesando solicitudes.' % os.cpu_count())
 
     def get_load(self):
         """Retorna la carga de trabajos pendientes del nodo."""
@@ -60,7 +66,7 @@ class Node:
                 self.load -= 1
 
             if func == '+':
-                func = Node._add
+                func = matrix.vector_add
             elif func == '-':
                 pass
             elif func == '*':
@@ -69,15 +75,6 @@ class Node:
             result = func(data)
             client = Pyro4.Proxy(client_uri)
             client.get_report(subtask_id, result)
-
-    @staticmethod
-    def _add(data):
-        """Adiciona dos vectores de igual dimensión, componente a componente."""
-        x, y = data
-        result = []
-        for i in range(len(x)):
-            result.append(x[i] + y[i])
-        return result
 
 
 if __name__ == '__main__':

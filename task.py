@@ -6,6 +6,7 @@ class Task:
         self.completed = False
         self.result = [None] * length
         self.id = task_id
+        self.time = datetime.now()
 
 
 class Subtask:
