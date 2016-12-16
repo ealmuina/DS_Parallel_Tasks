@@ -15,6 +15,9 @@ import node
 import utils
 from task import Task, Subtask
 
+Pyro4.config.COMMTIMEOUT = 1.5  # 1.5 seconds
+Pyro4.config.SERVERTYPE = "multiplex"
+
 
 @Pyro4.expose
 class Client:
@@ -28,12 +31,12 @@ class Client:
         self.node = node.Node()  # Nodo del sistema correspondiente al equipo
         self.lock = threading.Lock()  # Lock para el uso de 'self.nodes'
 
+        self.log = log.Log('client')
+
         self.ip = utils.get_ip()
         threading.Thread(target=self._ip_address_check_loop).start()
 
         self._update_Pyro_daemon()
-
-        self.log = log.Log('client')
 
         self.pending_tasks = set()
         self.pending_subtasks = Queue()
@@ -60,9 +63,8 @@ class Client:
                     uri = data.decode()
 
                     try:
-                        current_node = Pyro4.async(Pyro4.Proxy(uri))
-                        load = current_node.get_load()
-                        load.then(lambda l: updated_nodes.append((l, uri)))
+                        current_node = Pyro4.Proxy(uri)
+                        updated_nodes.append((current_node.get_load(), uri))
 
                     except CommunicationError:
                         # TODO Chequear que la excepcion es correcta
@@ -108,12 +110,9 @@ class Client:
                     st.time = datetime.now()
 
                     try:
-                        n = Pyro4.async(Pyro4.Proxy(uri))
+                        n = Pyro4.Proxy(uri)
                         n.process(st.data, st.func, (st.task.id, st.index), self.uri)
-
-                        load = n.get_load()
-                        load.then(lambda l: heapq.heappush(self.nodes, (l, uri)))
-
+                        heapq.heappush(self.nodes, (n.get_load(), uri))
                         self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri), True)
 
                     except CommunicationError:
@@ -135,12 +134,16 @@ class Client:
         # Cerrar self.daemon si ya existía
         try:
             self.daemon.shutdown()
+            # TODO Esto produce una excepcion en un hilo que el mismo crea y q no tengo forma de capturarla. WTF???
         except AttributeError:
+            # self todavía no tiene un atributo daemon
             pass
 
         self.daemon = Pyro4.Daemon(host=utils.get_ip())
         self.uri = self.daemon.register(self, force=True)
         threading.Thread(target=self.daemon.requestLoop).start()
+
+        self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
 
     def _add_sub(self, a, b, subtract=False):
         """Adiciona o resta dos matrices"""
@@ -223,8 +226,6 @@ def print_console_error(message):
 
 
 if __name__ == '__main__':
-    Pyro4.config.SERVERTYPE = "multiplex"
-
     client = Client()
 
     while True:

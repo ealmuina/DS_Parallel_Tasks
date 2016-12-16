@@ -11,6 +11,9 @@ import log
 import matrix
 import utils
 
+Pyro4.config.COMMTIMEOUT = 1.5  # 1.5 seconds
+Pyro4.config.SERVERTYPE = "multiplex"
+
 
 @Pyro4.expose
 class Node:
@@ -87,6 +90,7 @@ class Node:
         # Cerrar self.daemon si ya existía
         try:
             self.daemon.shutdown()
+            # TODO Esto produce una excepcion en un hilo que el mismo crea y q no tengo forma de capturarla. WTF???
         except AttributeError:
             pass
 
@@ -94,8 +98,8 @@ class Node:
         self.uri = self.daemon.register(self, force=True).asString()
         threading.Thread(target=self.daemon.requestLoop).start()
 
+        self.log.report('Dirección IP modificada a: %s' % utils.get_ip(), True, 'green')
+
 
 if __name__ == '__main__':
-    Pyro4.config.SERVERTYPE = "multiplex"
-
     node = Node()
