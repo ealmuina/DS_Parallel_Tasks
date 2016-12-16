@@ -6,7 +6,7 @@ from queue import Queue
 
 import Pyro4
 from Pyro4 import socketutil as pyrosocket
-from Pyro4.errors import PyroError
+from Pyro4.errors import CommunicationError
 
 import log
 import matrix
@@ -20,13 +20,17 @@ class Client:
     SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de nodos
     SCANNER_INTERVAL = 10  # Tiempo (segundos) entre escaneos del sistema
     SUBTASKS_TIMEOUT = 30  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un nodo
+    CHECK_IP_INTERVAL = 5  # Tiempo (segundos) transcurrido el cual se verificará si la IP sigue siendo la misma.
 
     def __init__(self):
         self.nodes = []  # Nodos accesibles, priorizados según su carga
         self.node = node.Node()  # Nodo del sistema correspondiente al equipo
         self.lock = threading.Lock()  # Lock para el uso de 'self.nodes'
 
-        self.connected = False
+        self.ip = utils.get_ip()
+        threading.Thread(target=self._ip_address_check_loop).start()
+
+        self._update_Pyro_daemon()
 
         self.log = log.Log('client')
 
@@ -34,10 +38,6 @@ class Client:
         self.pending_subtasks = Queue()
         self.pending_subtasks_dic = {}  # Mapea una tupla (task_id, index) a la subtarea pendiente correspondiente
         self.task_number = 0  # Entero usado para asignar identificadores a las tareas
-
-        daemon = Pyro4.Daemon(host=utils.get_ip())
-        self.uri = daemon.register(self)
-        threading.Thread(target=daemon.requestLoop).start()
 
         threading.Thread(target=self._scan_loop).start()
         threading.Thread(target=self._subtasks_checker_loop).start()
@@ -47,12 +47,9 @@ class Client:
     def _scan_loop(self):
         """Escanea la red en busca de nodos y actualiza una cola con prioridad según la carga de estos."""
 
-        scanner = pyrosocket.createBroadcastSocket()
-        scanner.settimeout(Client.SCANNER_TIMEOUT)
-
         while True:
-            if not self.connected:
-                continue
+            scanner = pyrosocket.createBroadcastSocket()
+            scanner.settimeout(Client.SCANNER_TIMEOUT)
 
             updated_nodes = []
             try:
@@ -62,18 +59,17 @@ class Client:
                     uri = data.decode()
                     try:
                         current_node = Pyro4.Proxy(uri)
-                        updated_nodes.append((current_node.get_load(), uri, current_node))
-                        # *** Se añadió la uri a la tupla para evitar excepción en el heapify si dos nodos
-                        # *** tienen la misma prioridad
-                    except PyroError:
+                        updated_nodes.append((current_node.get_load(), uri))
+                    except CommunicationError:
+                        # TODO Chequear que la excepcion es correcta
                         # Si los datos recibidos no son una uri válida, al tratar de crear el proxy,
                         # esta excepción es lanzada.
                         continue
 
             except OSError as e:
                 if e.errno == 101:
-                    # La red fue desconectada. Solo podrá ser usado el nodo propio.
-                    updated_nodes.append((self.node.get_load(), self.node.uri, self.node))
+                    # La red está desconectada. Solo podrá ser usado el nodo propio.
+                    updated_nodes.append((self.node.get_load(), self.node.uri))
 
             finally:
                 heapq.heapify(updated_nodes)
@@ -82,7 +78,7 @@ class Client:
                     for n in updated_nodes:
                         self.nodes.append(n)
 
-            self.log.report('Sistema escaneado. Se detectaron %d nodos.' % len(updated_nodes))
+            self.log.report('Sistema escaneado. Se detectaron %d nodos.' % len(updated_nodes), True)
             time.sleep(Client.SCANNER_INTERVAL)
 
     def _subtasks_checker_loop(self):
@@ -104,17 +100,38 @@ class Client:
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
                 # Tiempo de espera superado, asignar operacion a un nuevo nodo
                 with self.lock:
-                    load, uri, n = heapq.heappop(self.nodes)
+                    load, uri = heapq.heappop(self.nodes)
                     st.time = datetime.now()
                     try:
+                        n = Pyro4.Proxy(uri)
                         n.process(st.data, st.func, (st.task.id, st.index), self.uri)
-                        heapq.heappush(self.nodes, (n.get_load(), uri, n))
+                        heapq.heappush(self.nodes, (n.get_load(), uri))
                         self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
-                    except PyroError:
+                    except CommunicationError:
                         self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,
                                         True, 'red')
 
             self.pending_subtasks.put((st.time, st))
+
+    def _ip_address_check_loop(self):
+        while True:
+            ip = utils.get_ip()
+            if ip != self.ip:
+                self.ip = ip
+                self._update_Pyro_daemon()
+
+            time.sleep(Client.CHECK_IP_INTERVAL)
+
+    def _update_Pyro_daemon(self):
+        # Cerrar self.daemon si ya existía
+        try:
+            self.daemon.shutdown()
+        except AttributeError:
+            pass
+
+        self.daemon = Pyro4.Daemon(host=utils.get_ip())
+        self.uri = self.daemon.register(self, force=True)
+        threading.Thread(target=self.daemon.requestLoop).start()
 
     def _add_sub(self, a, b, subtract=False):
         """Adiciona o resta dos matrices"""
@@ -155,16 +172,6 @@ class Client:
 
         pass
         # TODO Continuar
-
-    def join_to_system(self):
-        """Integra el equipo al sistema distribuido."""
-        self.node.join_to_system()
-        self.connected = True
-
-    def leave_system(self):
-        """Se desconecta del sistema distribuido."""
-        self.node.leave_system()
-        self.connected = False
 
     def get_report(self, subtask_id, result):
         """Reporta al cliente el resultado de una operacion solicitada por este a uno de los nodos del sistema."""
@@ -207,7 +214,6 @@ def print_console_error(message):
 
 if __name__ == '__main__':
     client = Client()
-    client.join_to_system()
 
     while True:
         command = input().split()
