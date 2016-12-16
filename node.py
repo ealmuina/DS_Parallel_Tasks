@@ -99,4 +99,3 @@ if __name__ == '__main__':
     Pyro4.config.SERVERTYPE = "multiplex"
 
     node = Node()
-    node.join_to_system()
