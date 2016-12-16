@@ -74,7 +74,7 @@ class Node:
                 client = Pyro4.Proxy(client_uri)
                 client.get_report(subtask_id, result)
             except PyroError:
-                self.log.report('La operación con id %s fue completada, pero el cliente no pudo ser localizado.',
+                self.log.report('La operación con id %s fue completada, pero el cliente no pudo ser localizado.' %subtask_id,
                                 True, 'red')
 
     def _ip_address_check_loop(self):
