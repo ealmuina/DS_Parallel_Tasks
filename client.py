@@ -1,5 +1,4 @@
 import heapq
-import socket
 import threading
 import time
 from datetime import datetime
@@ -56,7 +55,6 @@ class Client:
                 continue
 
             updated_nodes = []
-
             try:
                 scanner.sendto(b'SCANNING', ('255.255.255.255', 5555))
                 while True:
@@ -72,16 +70,17 @@ class Client:
                         # esta excepción es lanzada.
                         continue
 
-            except socket.timeout:
+            except OSError as e:
+                if e.errno == 101:
+                    # La red fue desconectada. Solo podrá ser usado el nodo propio.
+                    updated_nodes.append((self.node.get_load(), self.node.uri, self.node))
+
+            finally:
                 heapq.heapify(updated_nodes)
                 with self.lock:
                     self.nodes.clear()
                     for n in updated_nodes:
                         self.nodes.append(n)
-
-            except OSError:
-                # La red fue desconectada. Intentar de nuevo
-                continue
 
             self.log.report('Sistema escaneado. Se detectaron %d nodos.' % len(updated_nodes))
             time.sleep(Client.SCANNER_INTERVAL)
