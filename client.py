@@ -1,4 +1,5 @@
 import heapq
+import os
 import threading
 import time
 from datetime import datetime
@@ -207,6 +208,7 @@ class Client:
         # Si la tarea se completó, reportar resultado y eliminarla de la lista de tareas pendientes
         if current_task.completed:
             # Guardar el resultado de la tarea en el archivo <current_task.id>.txt
+            os.makedirs('results', exist_ok=True)
             file_result = open('results/%s.txt' % current_task.id, 'w')
             file_result.write(matrix.str_matrix(current_task.result))
 

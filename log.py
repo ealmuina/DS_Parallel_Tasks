@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 
@@ -6,7 +7,9 @@ class Log:
         self.name = name
 
     def report(self, message, on_console=False, message_type=None):
+        os.makedirs('logs', exist_ok=True)
         file = open('logs/' + self.name + '_log.txt', 'a')
+
         s = '[{0}]: {1}'.format(datetime.now(), message)
         file.write(s + '\n')
         file.close()
