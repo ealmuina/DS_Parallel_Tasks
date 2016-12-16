@@ -57,9 +57,12 @@ class Client:
                 while True:
                     data, address = scanner.recvfrom(1024)
                     uri = data.decode()
+
                     try:
-                        current_node = Pyro4.Proxy(uri)
-                        updated_nodes.append((current_node.get_load(), uri))
+                        current_node = Pyro4.async(Pyro4.Proxy(uri))
+                        load = current_node.get_load()
+                        load.then(lambda l: updated_nodes.append((l, uri)))
+
                     except CommunicationError:
                         # TODO Chequear que la excepcion es correcta
                         # Si los datos recibidos no son una uri válida, al tratar de crear el proxy,
@@ -102,11 +105,16 @@ class Client:
                 with self.lock:
                     load, uri = heapq.heappop(self.nodes)
                     st.time = datetime.now()
+
                     try:
-                        n = Pyro4.Proxy(uri)
+                        n = Pyro4.async(Pyro4.Proxy(uri))
                         n.process(st.data, st.func, (st.task.id, st.index), self.uri)
-                        heapq.heappush(self.nodes, (n.get_load(), uri))
-                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
+
+                        load = n.get_load()
+                        load.then(lambda l: heapq.heappush(self.nodes, (l, uri)))
+
+                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri), True)
+
                     except CommunicationError:
                         self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,
                                         True, 'red')
@@ -213,6 +221,8 @@ def print_console_error(message):
 
 
 if __name__ == '__main__':
+    Pyro4.config.SERVERTYPE = "multiplex"
+
     client = Client()
 
     while True:
