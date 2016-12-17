@@ -84,7 +84,7 @@ class Client:
                     for n in updated_nodes:
                         self.nodes.append(n)
 
-            self.log.report('Sistema escaneado. Se detectaron %d nodos.' % len(updated_nodes), True)
+            self.log.report('Sistema escaneado. Se detectaron %d nodos.' % len(updated_nodes))
             time.sleep(Client.SCANNER_INTERVAL)
 
     def _subtasks_checker_loop(self):
@@ -113,7 +113,7 @@ class Client:
                         n = Pyro4.Proxy(uri)
                         n.process(st.data, st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.nodes, (n.get_load(), uri))
-                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri), True)
+                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
 
                     except CommunicationError:
                         self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,

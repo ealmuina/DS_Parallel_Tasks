@@ -74,8 +74,9 @@ class Node:
                 client = Pyro4.Proxy(client_uri)
                 client.get_report(subtask_id, result)
             except PyroError:
-                self.log.report('La operación con id %s fue completada, pero el cliente no pudo ser localizado.' %subtask_id,
-                                True, 'red')
+                self.log.report(
+                    'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % subtask_id,
+                    True, 'red')
 
     def _ip_address_check_loop(self):
         while True:
@@ -98,7 +99,7 @@ class Node:
         self.uri = self.daemon.register(self, force=True).asString()
         threading.Thread(target=self.daemon.requestLoop).start()
 
-        self.log.report('Dirección IP modificada a: %s' % utils.get_ip(), True, 'green')
+        self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
 
 
 if __name__ == '__main__':
