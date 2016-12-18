@@ -75,7 +75,12 @@ class Node:
 
         listener = pyrosocket.createBroadcastSocket(('', 5555))
         while True:
-            data, address = listener.recvfrom(1024)
+            try:
+                data, address = listener.recvfrom(1024)
+            except ConnectionResetError:
+                # Se cerró la conexión antes de tiempo. Continuar iterando
+                continue
+
             if data.decode() == 'SCANNING':
                 listener.sendto(self.uri.encode(), address)
 

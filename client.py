@@ -62,7 +62,12 @@ class Client:
             try:
                 scanner.sendto(b'SCANNING', ('255.255.255.255', 5555))
                 while True:
-                    data, address = scanner.recvfrom(1024)
+                    try:
+                        data, address = scanner.recvfrom(1024)
+                    except ConnectionResetError:
+                        # Se cerró la conexión antes de tiempo. Continuar iterando
+                        continue
+
                     uri = data.decode()
 
                     try:
