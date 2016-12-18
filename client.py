@@ -114,8 +114,10 @@ class Client:
 
                     try:
                         n = Pyro4.Proxy(uri)
-                        n.process(st.data, st.func, (st.task.id, st.index), self.uri)
+                        data = st.data if not st.func in {'*'} else st.data[0]
+                        n.process(data, st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.nodes, (n.get_load(), uri))
+
                         self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
 
                     except PyroError:
@@ -245,6 +247,14 @@ class Client:
                 except PyroError:
                     # No se pudo completar la conexión al nodo
                     pass
+
+    def get_data(self, subtask_id):
+        """Retorna los datos correspondientes a una subtarea."""
+
+        if subtask_id in self.pending_subtasks_dic:
+            subtask = self.pending_subtasks_dic[subtask_id]
+            return subtask.data
+        return None
 
 
 def print_console_error(message):

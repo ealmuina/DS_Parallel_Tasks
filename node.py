@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+from collections import deque
 from datetime import datetime, timedelta
 from queue import Queue
 
@@ -22,10 +23,14 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 @Pyro4.expose
 class Node:
     CHECK_IP_INTERVAL = 5  # Tiempo (segundos) transcurrido el cual se verificará si la IP sigue siendo la misma.
+    MAX_CACHE_SIZE = 100  # Límite de registros que puede contener la cache
 
     def __init__(self):
         self.log = log.Log('node')
         self.pending_tasks = Queue()
+
+        self.cache = {}
+        self.cache_timer = deque()
 
         self.load = 0  # Total de operaciones pendientes
         self.lock = threading.Lock()  # Lock para el uso de self.load
@@ -86,20 +91,22 @@ class Node:
                 func = matrix.vector_sub
             elif func == '*':
                 func = matrix.vector_mult
+                data = (data, self._get_task_data(subtask_id, client_uri))
 
-            start_time = datetime.now()
-            result = func(data)
-            self.total_operations += 1
-            self.total_time += datetime.now() - start_time
+            if data:
+                start_time = datetime.now()
+                result = func(data)
+                self.total_operations += 1
+                self.total_time += datetime.now() - start_time
 
-            try:
-                client = Pyro4.Proxy(client_uri)
-                client.set_report(subtask_id, result)
+                try:
+                    client = Pyro4.Proxy(client_uri)
+                    client.set_report(subtask_id, result)
 
-            except PyroError:
-                self.log.report(
-                    'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(subtask_id),
-                    True, 'red')
+                except PyroError:
+                    self.log.report(
+                        'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(
+                            subtask_id), True, 'red')
 
             # Tarea completada. Decrementar la cantidad de tareas pendientes
             with self.lock:
@@ -127,6 +134,29 @@ class Node:
         threading.Thread(target=self.daemon.requestLoop).start()
 
         self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
+
+    def _get_task_data(self, subtask_id, client_uri):
+        """Retorna los datos comunes a todas las subtareas de una tarea."""
+
+        if subtask_id[0] in self.cache:
+            return self.cache[subtask_id[0]]
+
+        else:
+            try:
+                client = Pyro4.Proxy(client_uri)
+                data = client.get_data(subtask_id)[1]
+
+                if len(self.cache) > Node.MAX_CACHE_SIZE:
+                    d = self.cache_timer.pop()
+                    self.cache.pop(d)
+
+                self.cache_timer.appendleft(subtask_id[0])
+                self.cache[subtask_id[0]] = data
+                return data
+
+            except PyroError:
+                # Cliente no diponible. Dar por completada la operación
+                return None
 
 
 if __name__ == '__main__':
