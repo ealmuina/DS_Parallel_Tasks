@@ -1,7 +1,7 @@
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from queue import Queue
 
 import Pyro4
@@ -32,7 +32,7 @@ class Node:
 
         # Datos relativos al total de operaciones realizadas y el tiempo requerido para completarlas
         self.total_operations = 0
-        self.total_time = 0
+        self.total_time = timedelta(0)
 
         self.ip = utils.get_ip()
         threading.Thread(target=self._ip_address_check_loop).start()
@@ -96,7 +96,7 @@ class Node:
 
             try:
                 client = Pyro4.Proxy(client_uri)
-                client.get_report(subtask_id, result)
+                client.set_report(subtask_id, result)
 
             except PyroError:
                 self.log.report(
