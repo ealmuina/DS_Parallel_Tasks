@@ -178,15 +178,20 @@ class Client:
     def mult(self, a, b):
         """Multiplica dos matrices."""
 
-        # Función que calcula la sumatoria del producto componente a componente de dos vectores
-        def func(v1, v2):
-            result = 0
-            for i in range(len(v1)):
-                result += v1[i] * v2[i]
-            return result
+        if len(a[0]) != len(b):
+            raise ArithmeticError(
+                "La cantidad de columnas de la matriz 'a' debe coincidir con la cantidad de filas de 'b'.")
 
-        pass
-        # TODO Continuar
+        # Crear nueva tarea
+        task = Task(len(a), self.task_number)
+        self.pending_tasks.add(task)
+        self.task_number += 1
+
+        # Crear subtareas para el producto de las filas de 'a' por la matriz 'b'
+        for i in range(len(a)):
+            st = Subtask(task, i, (a[i], b), '*')
+            self.pending_subtasks.put((st.time, st))
+            self.pending_subtasks_dic[(task.id, i)] = st
 
     def set_report(self, subtask_id, result):
         """Reporta al cliente el resultado de una operacion solicitada por este a uno de los nodos del sistema."""
@@ -225,12 +230,17 @@ class Client:
             self.pending_tasks.remove(current_task)
 
     def print_stats(self):
-        print('Nodo', 'Operaciones', 'Tiempo total', sep='\t')
+        print('Nodo', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
         with self.lock:
             for load, uri in self.nodes:
                 try:
                     n = Pyro4.Proxy(uri)
-                    print(n.get_ip(), n.get_total_operations(), n.get_total_time(), sep='\t')
+
+                    total_operations = n.get_total_operations()
+                    total_time = n.get_total_time()
+                    avg_time = total_time / total_operations if total_operations != 0 else 0
+
+                    print(n.get_ip(), total_operations, total_time, avg_time, sep='\t')
 
                 except PyroError:
                     # No se pudo completar la conexión al nodo

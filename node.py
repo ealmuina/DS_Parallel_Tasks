@@ -32,7 +32,7 @@ class Node:
 
         # Datos relativos al total de operaciones realizadas y el tiempo requerido para completarlas
         self.total_operations = 0
-        self.total_time = timedelta(0)
+        self.total_time = timedelta()
 
         self.ip = utils.get_ip()
         threading.Thread(target=self._ip_address_check_loop).start()

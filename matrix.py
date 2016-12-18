@@ -42,13 +42,21 @@ def vector_sub(data):
 
 
 def vector_mult(data):
-    # TODO Implementar
-    pass
+    """Multiplica un vector por una matriz."""
+
+    v, m = data
+    result = [0] * len(m[0])
+
+    for i in range(len(m)):
+        for j in range(len(m[i])):
+            result[j] += v[i] * m[i][j]
+
+    return result
 
 
 def load_matrices(file):
     # TODO Implementar correctamente
-    return get_random_matrix(1000, 1050), get_random_matrix(1000, 1050)
+    return get_random_matrix(100, 500), get_random_matrix(500, 500)
 
 
 if __name__ == '__main__':
