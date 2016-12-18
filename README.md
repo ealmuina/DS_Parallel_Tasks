@@ -19,5 +19,3 @@ los comandos siguientes:
 
     stats: Este comando deberá imprimir la lista de nodos worker, identificados por un nombre único, acompañado por la
     cantidad de operaciones efectuadas y el tiempo promedio para ejecutar cada operación.
-
-

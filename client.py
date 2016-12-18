@@ -7,7 +7,7 @@ from queue import Queue
 
 import Pyro4
 from Pyro4 import socketutil as pyrosocket
-from Pyro4.errors import CommunicationError
+from Pyro4.errors import PyroError
 
 import log
 import matrix
@@ -69,7 +69,7 @@ class Client:
                         current_node = Pyro4.Proxy(uri)
                         updated_nodes.append((current_node.get_load(), uri))
 
-                    except CommunicationError:
+                    except PyroError:
                         # TODO Chequear que la excepcion es correcta
                         # Si los datos recibidos no son una uri válida, al tratar de crear el proxy,
                         # esta excepción es lanzada.
@@ -118,7 +118,7 @@ class Client:
                         heapq.heappush(self.nodes, (n.get_load(), uri))
                         self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri), True)
 
-                    except CommunicationError:
+                    except PyroError:
                         self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,
                                         True, 'red')
 
@@ -188,7 +188,7 @@ class Client:
         pass
         # TODO Continuar
 
-    def get_report(self, subtask_id, result):
+    def set_report(self, subtask_id, result):
         """Reporta al cliente el resultado de una operacion solicitada por este a uno de los nodos del sistema."""
 
         # Localizar la subtarea correspondiente al id y marcarla como completada.
@@ -224,6 +224,18 @@ class Client:
             # Eliminar la tarea de la lista de tareas pendientes
             self.pending_tasks.remove(current_task)
 
+    def print_stats(self):
+        print('Nodo', 'Operaciones', 'Tiempo total', sep='\t')
+        with self.lock:
+            for load, uri in self.nodes:
+                try:
+                    n = Pyro4.Proxy(uri)
+                    print(n.get_ip(), n.get_total_operations(), n.get_total_time())
+
+                except PyroError:
+                    # No se pudo completar la conexión al nodo
+                    pass
+
 
 def print_console_error(message):
     print('\x1b[0;31;48m' + message + '\x1b[0m')
@@ -257,8 +269,7 @@ if __name__ == '__main__':
                 print_console_error('La sintaxis es: exec <function> <values_file>.txt')
 
         elif command[0] == 'stats':
-            # TODO Implementar los requerimientos para poder ejecutar el comando 'stats'
-            pass
+            client.print_stats()
 
         else:
             print_console_error('No se reconoce el comando %s.' % command[0])

@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+from datetime import datetime
 from queue import Queue
 
 import Pyro4
@@ -24,9 +25,14 @@ class Node:
 
     def __init__(self):
         self.log = log.Log('node')
-        self.load = 0
-        self.lock = threading.Lock()
         self.pending_tasks = Queue()
+
+        self.load = 0  # Total de operaciones pendientes
+        self.lock = threading.Lock()  # Lock para el uso de self.load
+
+        # Datos relativos al total de operaciones realizadas y el tiempo requerido para completarlas
+        self.total_operations = 0
+        self.total_time = 0
 
         self.ip = utils.get_ip()
         threading.Thread(target=self._ip_address_check_loop).start()
@@ -41,17 +47,27 @@ class Node:
         self.log.report('Nodo inicializado con %d hilos procesando solicitudes.' % os.cpu_count(), True)
 
     def get_load(self):
-        """Retorna la carga de trabajos pendientes del nodo."""
         return self.load
+
+    def get_ip(self):
+        return self.ip
+
+    def get_total_operations(self):
+        return self.total_operations
+
+    def get_total_time(self):
+        return self.total_time
 
     def process(self, data, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
+
         with self.lock:
             self.load += 1
         self.pending_tasks.put((data, func, subtask_id, client_uri))
 
     def _listen_loop(self):
         """Escucha en espera de que algún cliente solicite su uri. Cuando esto ocurre, envía la uri al cliente."""
+
         listener = pyrosocket.createBroadcastSocket(('', 5555))
         while True:
             data, address = listener.recvfrom(1024)
@@ -60,6 +76,7 @@ class Node:
 
     def _process_loop(self):
         """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""
+
         while True:
             data, func, subtask_id, client_uri = self.pending_tasks.get()
             with self.lock:
@@ -72,10 +89,15 @@ class Node:
             elif func == '*':
                 func = matrix.vector_mult
 
+            start_time = datetime.now()
             result = func(data)
+            self.total_operations += 1
+            self.total_time += datetime.now() - start_time
+
             try:
                 client = Pyro4.Proxy(client_uri)
                 client.get_report(subtask_id, result)
+
             except PyroError:
                 self.log.report(
                     'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(subtask_id),
