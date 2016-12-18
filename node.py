@@ -91,7 +91,8 @@ class Node:
                 func = matrix.vector_sub
             elif func == '*':
                 func = matrix.vector_mult
-                data = (data, self._get_task_data(subtask_id, client_uri))
+                task_data = self._get_task_data(subtask_id, client_uri)
+                data = (data, task_data) if task_data else None
 
             if data:
                 start_time = datetime.now()

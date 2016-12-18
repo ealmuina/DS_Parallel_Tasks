@@ -249,7 +249,7 @@ class Client:
                     pass
 
     def get_data(self, subtask_id):
-        """Retorna los datos correspondientes a una subtarea."""
+        """Retorna los datos correspondientes a una subtarea si no ha sido completada."""
 
         if subtask_id in self.pending_subtasks_dic:
             subtask = self.pending_subtasks_dic[subtask_id]
