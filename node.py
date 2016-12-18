@@ -79,8 +79,6 @@ class Node:
 
         while True:
             data, func, subtask_id, client_uri = self.pending_tasks.get()
-            with self.lock:
-                self.load -= 1
 
             if func == '+':
                 func = matrix.vector_add
@@ -102,6 +100,10 @@ class Node:
                 self.log.report(
                     'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(subtask_id),
                     True, 'red')
+
+            # Tarea completada. Decrementar la cantidad de tareas pendientes
+            with self.lock:
+                self.load -= 1
 
     def _ip_address_check_loop(self):
         while True:

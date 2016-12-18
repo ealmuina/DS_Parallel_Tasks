@@ -116,7 +116,7 @@ class Client:
                         n = Pyro4.Proxy(uri)
                         n.process(st.data, st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.nodes, (n.get_load(), uri))
-                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri), True)
+                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
 
                     except PyroError:
                         self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,
@@ -230,7 +230,7 @@ class Client:
             for load, uri in self.nodes:
                 try:
                     n = Pyro4.Proxy(uri)
-                    print(n.get_ip(), n.get_total_operations(), n.get_total_time())
+                    print(n.get_ip(), n.get_total_operations(), n.get_total_time(), sep='\t')
 
                 except PyroError:
                     # No se pudo completar la conexión al nodo
