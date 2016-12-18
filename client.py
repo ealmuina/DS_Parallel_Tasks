@@ -18,6 +18,9 @@ from task import Task, Subtask
 Pyro4.config.COMMTIMEOUT = 1.5  # 1.5 seconds
 Pyro4.config.SERVERTYPE = "multiplex"
 
+Pyro4.config.SERIALIZER = 'pickle'
+Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
+
 
 @Pyro4.expose
 class Client:
@@ -113,7 +116,7 @@ class Client:
                         n = Pyro4.Proxy(uri)
                         n.process(st.data, st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.nodes, (n.get_load(), uri))
-                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
+                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri), True)
 
                     except CommunicationError:
                         self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,
@@ -208,7 +211,6 @@ class Client:
         for x in current_task.result:
             current_task.completed = current_task.completed and x
 
-        # Si la tarea se completó, reportar resultado y eliminarla de la lista de tareas pendientes
         if current_task.completed:
             # Guardar el resultado de la tarea en el archivo <current_task.id>.txt
             os.makedirs('results', exist_ok=True)
@@ -218,6 +220,8 @@ class Client:
             self.log.report(
                 'Tarea %(id)s completada. Puede ver el resultado en el archivo %(id)s.txt.\nTiempo total: %(time)s'
                 % {'id': current_task.id, 'time': datetime.now() - current_task.time}, True, 'green')
+
+            # Eliminar la tarea de la lista de tareas pendientes
             self.pending_tasks.remove(current_task)
 
 

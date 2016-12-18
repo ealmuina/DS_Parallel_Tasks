@@ -14,6 +14,9 @@ import utils
 Pyro4.config.COMMTIMEOUT = 1.5  # 1.5 seconds
 Pyro4.config.SERVERTYPE = "multiplex"
 
+Pyro4.config.SERIALIZER = 'pickle'
+Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
+
 
 @Pyro4.expose
 class Node:
@@ -75,7 +78,7 @@ class Node:
                 client.get_report(subtask_id, result)
             except PyroError:
                 self.log.report(
-                    'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % subtask_id,
+                    'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(subtask_id),
                     True, 'red')
 
     def _ip_address_check_loop(self):
