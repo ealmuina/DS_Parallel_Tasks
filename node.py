@@ -57,7 +57,7 @@ class Node:
 
         total_time = self.total_time.total_seconds()
         avg_time = self.total_operations / total_time if total_time > 0 else 1
-        return self.load * avg_time
+        return (self.load + 1) * avg_time
 
     def get_ip(self):
         return self.ip
@@ -102,13 +102,14 @@ class Node:
             elif func == '*':
                 func = matrix.vector_mult
                 task_data = self._get_task_data(subtask_id, client_uri)
+
+                # Si task_data es None, entonces la tarea asociada ya fue completada. Hacer data = None en tal caso
                 data = (data, task_data) if task_data else None
 
             if data:
                 start_time = datetime.now()
                 result = func(data)
                 self.total_operations += 1
-                self.total_time += datetime.now() - start_time
 
                 try:
                     client = Pyro4.Proxy(client_uri)
@@ -118,6 +119,8 @@ class Node:
                     self.log.report(
                         'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(
                             subtask_id), True, 'red')
+
+                self.total_time += datetime.now() - start_time
 
             # Tarea completada. Decrementar la cantidad de tareas pendientes
             with self.lock:
