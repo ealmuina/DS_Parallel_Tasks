@@ -55,7 +55,8 @@ class Node:
         """Retorna la 'carga' del nodo, expresada como el producto de la cantidad de operaciones que tiene pendientes
          de completar y el tiempo promedio que demora en completar una."""
 
-        avg_time = self.total_operations / self.total_time if self.total_time > 0 else 1
+        total_time = self.total_time.total_seconds()
+        avg_time = self.total_operations / total_time if total_time > 0 else 1
         return self.load * avg_time
 
     def get_ip(self):
