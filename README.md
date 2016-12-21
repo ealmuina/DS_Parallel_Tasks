@@ -19,3 +19,34 @@ los comandos siguientes:
 
     stats: Este comando deberá imprimir la lista de nodos worker, identificados por un nombre único, acompañado por la
     cantidad de operaciones efectuadas y el tiempo promedio para ejecutar cada operación.
+
+
+========================================================================================================================
+
+Componentes del sistema:
+
+- Clientes: Son los elementos que solicitan la ejecución de tareas sobre un conjunto de datos que estos proveen.
+- Nodos: Elementos del sistema, que participan en el proceso de ejecutar y responder las tareas solicitadas por los
+clientes.
+
+Un cliente tiene a su vez un nodo propio, de modo que las operaciones siempre pueden ser realizadas, incluso si el
+cliente no se encuentra conectado a ninguna red compartida con otros nodos. El cliente determina los nodos existentes
+en el sistema mediante un broadcast.
+
+Los clientes mantienen conocimiento de los nodos accesibles mediante un heap de mínimo, al que añaden cada nodo; y donde
+se emplea como criterio para comparar dos nodos, la cantidad de operaciones pendientes por ejecutar que tienen
+multiplicada por el tiempo promedio que demora en ejecutar una operación.
+
+Los nodos siempre están escuchando por un puerto, a la espera de que algún cliente solicite su URI, cuando esto ocurre,
+se la envían al cliente que la solicitó.
+
+¿Qué ocurre cuando un componente del sistema se desconecta?
+- Si el que se desconecta es un CLIENTE, todas las tareas que este había asignado a nodos del sistema, estos las
+procesarán, y al intentar reportar el resultado descubrirán que el cliente se desconectó, desechándolo y continuando sus
+tareas. El cliente, por su parte, actualizará su estado para integrarse al nuevo entorno de red (de no estar conectado a
+ninguna, será "localhost") y escanear en busca de nuevos nodos a los que asignar aquellas tareas para las que aún no
+conoce su respuesta.
+- Si el que se desconecta es un NODO, todas las tareas que le habían sido asignadas serán procesadas y al intentar
+reportar su resultado, se desecharán si no puede ser localizado el cliente que las solicitó. Se actualizará su estado,
+para integrarse al nuevo entorno de red y esperará los broadcasts de nuevos clientes.
+

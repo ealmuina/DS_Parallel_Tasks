@@ -52,7 +52,11 @@ class Node:
         self.log.report('Nodo inicializado con %d hilos procesando solicitudes.' % os.cpu_count(), True)
 
     def get_load(self):
-        return self.load
+        """Retorna la 'carga' del nodo, expresada como el producto de la cantidad de operaciones que tiene pendientes
+         de completar y el tiempo promedio que demora en completar una."""
+
+        avg_time = self.total_operations / self.total_time if self.total_time > 0 else 1
+        return self.load * avg_time
 
     def get_ip(self):
         return self.ip
