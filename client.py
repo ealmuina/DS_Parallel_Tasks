@@ -26,7 +26,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 class Client(Node):
     SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de workers
     SCANNER_INTERVAL = 10  # Tiempo (segundos) entre escaneos del sistema
-    SUBTASKS_TIMEOUT = 2  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un worker
+    SUBTASKS_TIMEOUT = 10  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un worker
 
     def __init__(self):
         super().__init__()
