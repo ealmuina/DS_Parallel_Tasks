@@ -11,11 +11,11 @@ from Pyro4.errors import PyroError
 
 import log
 import matrix
-import node
-import utils
+from node import Node
 from task import Task, Subtask
+from worker import Worker
 
-Pyro4.config.COMMTIMEOUT = 1.5  # 1.5 seconds
+Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
 Pyro4.config.SERVERTYPE = "multiplex"
 
 Pyro4.config.SERIALIZER = 'pickle'
@@ -23,23 +23,19 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
 
 @Pyro4.expose
-class Client:
-    SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de nodos
+class Client(Node):
+    SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de workers
     SCANNER_INTERVAL = 10  # Tiempo (segundos) entre escaneos del sistema
-    SUBTASKS_TIMEOUT = 30  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un nodo
-    CHECK_IP_INTERVAL = 5  # Tiempo (segundos) transcurrido el cual se verificará si la IP sigue siendo la misma.
+    SUBTASKS_TIMEOUT = 2  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un worker
 
     def __init__(self):
-        self.nodes = []  # Nodos accesibles, priorizados según su carga
-        self.node = node.Node()  # Nodo del sistema correspondiente al equipo
-        self.lock = threading.Lock()  # Lock para el uso de 'self.nodes'
+        super().__init__()
+
+        self.workers = []  # Workers accesibles, priorizados según su carga
+        self.worker = Worker()  # Worker del sistema correspondiente al equipo
+        self.lock = threading.Lock()  # Lock para el uso de 'self.workers'
 
         self.log = log.Log('client')
-
-        self.ip = utils.get_ip()
-        threading.Thread(target=self._ip_address_check_loop).start()
-
-        self._update_Pyro_daemon()
 
         self.pending_tasks = set()
         self.pending_subtasks = Queue()
@@ -52,7 +48,7 @@ class Client:
         self.log.report('Cliente inicializado.', True)
 
     def _scan_loop(self):
-        """Escanea la red en busca de nodos y actualiza una cola con prioridad según la carga de estos."""
+        """Escanea la red en busca de workers y actualiza una cola con prioridad según la carga de estos."""
 
         while True:
             scanner = pyrosocket.createBroadcastSocket()
@@ -82,26 +78,26 @@ class Client:
 
             except OSError as e:
                 if e.errno == 101:
-                    # La red está desconectada. Solo podrá ser usado el nodo propio.
-                    updated_nodes.append((self.node.get_load(), self.node.uri))
+                    # La red está desconectada. Solo podrá ser usado el worker propio.
+                    updated_nodes.append((self.worker.get_load(), self.worker.uri))
 
             finally:
                 heapq.heapify(updated_nodes)
                 with self.lock:
-                    self.nodes.clear()
+                    self.workers.clear()
                     for n in updated_nodes:
-                        self.nodes.append(n)
+                        self.workers.append(n)
 
-            self.log.report('Sistema escaneado. Se detectaron %d nodos.' % len(updated_nodes))
+            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_nodes))
             time.sleep(Client.SCANNER_INTERVAL)
 
     def _subtasks_checker_loop(self):
         """Chequea si ha expirado el tiempo de espera por el resultado de alguna operacion.
-        Si esto ocurre, la asigna a un nuevo nodo."""
+        Si esto ocurre, la asigna a un nuevo worker."""
 
         while True:
-            if len(self.nodes) == 0:
-                # No se han encontrado nodos del sistema a los que asignar subtareas
+            if len(self.workers) == 0:
+                # No se han encontrado workers del sistema a los que asignar subtareas
                 continue
 
             t, st = self.pending_subtasks.get()
@@ -112,48 +108,25 @@ class Client:
                 continue
 
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
-                # Tiempo de espera superado, asignar operacion a un nuevo nodo
+                # Tiempo de espera superado, asignar operacion a un nuevo worker
                 with self.lock:
-                    load, uri = heapq.heappop(self.nodes)
+                    load, uri = heapq.heappop(self.workers)
                     st.time = datetime.now()
 
                     try:
                         n = Pyro4.Proxy(uri)
                         data = st.data if not st.func in {'*'} else st.data[0]
                         n.process(data, st.func, (st.task.id, st.index), self.uri)
-                        heapq.heappush(self.nodes, (n.get_load(), uri))
+                        heapq.heappush(self.workers, (n.get_load(), uri))
 
-                        self.log.report('Asignada la subtarea %s al nodo %s' % ((st.task.id, st.index), uri))
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
 
                     except PyroError:
-                        self.log.report('Se intentó enviar subtarea al nodo %s, pero no se encuentra accesible.' % uri,
-                                        True, 'red')
+                        self.log.report(
+                            'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % uri,
+                            True, 'red')
 
             self.pending_subtasks.put((st.time, st))
-
-    def _ip_address_check_loop(self):
-        while True:
-            ip = utils.get_ip()
-            if ip != self.ip:
-                self.ip = ip
-                self._update_Pyro_daemon()
-
-            time.sleep(Client.CHECK_IP_INTERVAL)
-
-    def _update_Pyro_daemon(self):
-        # Cerrar self.daemon si ya existía
-        try:
-            self.daemon.shutdown()
-            # TODO Esto produce una excepcion en un hilo que el mismo crea y q no tengo forma de capturarla. WTF???
-        except AttributeError:
-            # self todavía no tiene un atributo daemon
-            pass
-
-        self.daemon = Pyro4.Daemon(host=utils.get_ip())
-        self.uri = self.daemon.register(self, force=True)
-        threading.Thread(target=self.daemon.requestLoop).start()
-
-        self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
 
     def _add_sub(self, a, b, subtract=False):
         """Adiciona o resta dos matrices"""
@@ -201,14 +174,15 @@ class Client:
             self.pending_subtasks_dic[(task.id, i)] = st
 
     def set_report(self, subtask_id, result):
-        """Reporta al cliente el resultado de una operacion solicitada por este a uno de los nodos del sistema."""
+        """Reporta al cliente el resultado de una operacion solicitada por este a uno de los workers del sistema."""
 
         # Localizar la subtarea correspondiente al id y marcarla como completada.
         # Si no se encuentra la subtarea, entonces ya fue resuelta. Terminar el llamado al método.
         try:
             subtask = self.pending_subtasks_dic.pop(subtask_id)
         except KeyError:
-            self.log.report('Un nodo reportó el resultado de una operación ya completada. La respuesta será desechada.')
+            self.log.report(
+                'Un worker reportó el resultado de una operación ya completada. La respuesta será desechada.')
             return None
 
         subtask.completed = True
@@ -237,9 +211,9 @@ class Client:
             self.pending_tasks.remove(current_task)
 
     def print_stats(self):
-        print('Nodo', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
+        print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
         with self.lock:
-            for load, uri in self.nodes:
+            for load, uri in self.workers:
                 try:
                     n = Pyro4.Proxy(uri)
 
@@ -250,7 +224,7 @@ class Client:
                     print(n.get_ip(), total_operations, total_time, avg_time, sep='\t')
 
                 except PyroError:
-                    # No se pudo completar la conexión al nodo
+                    # No se pudo completar la conexión al worker
                     pass
 
     def get_data(self, subtask_id):
