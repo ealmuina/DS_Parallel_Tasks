@@ -22,12 +22,14 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 @Pyro4.expose
 class Worker(Node):
     MAX_CACHE_SIZE = 100  # Límite de registros que puede contener la cache
+    MAX_COMPLETED_TASKS = 100  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
 
     def __init__(self):
         super().__init__()
 
         self.log = log.Log('worker')
         self.pending_tasks = Queue()
+        self.completed_tasks = Queue()
 
         self.cache = {}
         self.cache_timer = deque()  # Conserva los registros en el orden en que fueron insertados en la cache
@@ -40,6 +42,7 @@ class Worker(Node):
         self.total_time = timedelta()
 
         threading.Thread(target=self._listen_loop).start()
+        threading.Thread(target=self._deliver_loop).start()
 
         for i in range(os.cpu_count()):
             threading.Thread(target=self._process_loop).start()
@@ -104,22 +107,35 @@ class Worker(Node):
             if data:
                 start_time = datetime.now()
                 result = func(data)
+                self.total_time += datetime.now() - start_time
                 self.total_operations += 1
 
-                try:
-                    client = Pyro4.Proxy(client_uri)
-                    client.set_report(subtask_id, result)
-
-                except PyroError:
-                    self.log.report(
-                        'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(
-                            subtask_id), True, 'red')
-
-                self.total_time += datetime.now() - start_time
+                # Encolar el resultado para que sea entregado al cliente
+                self.completed_tasks.put((result, subtask_id, client_uri))
 
             # Tarea completada. Decrementar la cantidad de tareas pendientes
             with self.lock:
                 self.load -= 1
+
+    def _deliver_loop(self):
+        while True:
+            result, subtask_id, client_uri = self.completed_tasks.get()
+
+            try:
+                client = Pyro4.Proxy(client_uri)
+                client.report(subtask_id, result)
+
+            except PyroError:
+                log_message = 'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(
+                    subtask_id)
+
+                if len(self.completed_tasks.queue) < Worker.MAX_COMPLETED_TASKS:
+                    self.completed_tasks.put((result, subtask_id, client_uri))
+                    log_message += 'Se intentará entregar el resultado más tarde.'
+                else:
+                    log_message += 'Límite de resultados pendientes por entregar superado; la operación será desechada.'
+
+                self.log.report(log_message, True, 'red')
 
     def _get_task_data(self, subtask_id, client_uri):
         """Retorna los datos comunes a todas las subtareas de una tarea."""

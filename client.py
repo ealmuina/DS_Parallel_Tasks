@@ -173,7 +173,7 @@ class Client(Node):
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
-    def set_report(self, subtask_id, result):
+    def report(self, subtask_id, result):
         """Reporta al cliente el resultado de una operacion solicitada por este a uno de los workers del sistema."""
 
         # Localizar la subtarea correspondiente al id y marcarla como completada.

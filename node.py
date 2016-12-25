@@ -27,7 +27,7 @@ class Node():
     def _update_Pyro_daemon(self):
         # Cerrar self.daemon si ya existía
         try:
-            self.daemon.unregister(self)  # sera esta una solucion?
+            self.daemon.unregister(self)  # TODO Verificar si sera esta una solucion
             self.daemon.shutdown()
             # TODO Esto produce una excepcion en un hilo que el mismo crea y q no tengo forma de capturarla. WTF???
         except AttributeError:
