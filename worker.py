@@ -22,7 +22,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 @Pyro4.expose
 class Worker(Node):
     MAX_CACHE_SIZE = 100  # Límite de registros que puede contener la cache
-    MAX_COMPLETED_TASKS = 100  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
+    MAX_COMPLETED_TASKS = 10  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
 
     def __init__(self):
         super().__init__()
@@ -126,16 +126,12 @@ class Worker(Node):
                 client.report(subtask_id, result)
 
             except PyroError:
-                log_message = 'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(
-                    subtask_id)
-
                 if len(self.completed_tasks.queue) < Worker.MAX_COMPLETED_TASKS:
                     self.completed_tasks.put((result, subtask_id, client_uri))
-                    log_message += 'Se intentará entregar el resultado más tarde.'
                 else:
-                    log_message += 'Límite de resultados pendientes por entregar superado; la operación será desechada.'
-
-                self.log.report(log_message, True, 'red')
+                    self.log.report(
+                        'La operación con id %s fue completada, pero el cliente no pudo ser localizado.' % str(
+                            subtask_id), True, 'red')
 
     def _get_task_data(self, subtask_id, client_uri):
         """Retorna los datos comunes a todas las subtareas de una tarea."""
