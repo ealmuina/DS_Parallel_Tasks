@@ -122,8 +122,10 @@ class Worker(Node):
             result, subtask_id, client_uri = self.completed_tasks.get()
 
             try:
+                start_time = datetime.now()
                 client = Pyro4.Proxy(client_uri)
                 client.report(subtask_id, result)
+                self.total_time += datetime.now() - start_time
 
             except PyroError:
                 if len(self.completed_tasks.queue) < Worker.MAX_COMPLETED_TASKS:
