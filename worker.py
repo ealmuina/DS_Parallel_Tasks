@@ -54,7 +54,7 @@ class Worker(Node):
          de completar y el tiempo promedio que demora en completar una."""
 
         total_time = self.total_time.total_seconds()
-        avg_time = self.total_operations / total_time if total_time > 0 else 1
+        avg_time = total_time / self.total_operations if total_time != 0 else 1
         return (self.load + 1) * avg_time
 
     def get_ip(self):
