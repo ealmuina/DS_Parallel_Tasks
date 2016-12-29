@@ -26,7 +26,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 class Client(Node):
     SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de workers
     SCANNER_INTERVAL = 10  # Tiempo (segundos) entre escaneos del sistema
-    SUBTASKS_TIMEOUT = 15  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un worker
+    SUBTASKS_TIMEOUT = 30  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un worker
 
     def __init__(self):
         super().__init__()
@@ -249,6 +249,7 @@ if __name__ == '__main__':
             try:
                 function, values_file = command[1:]
                 a, b = matrix.load_matrices(values_file)
+                print('Matrices cargadas. Iniciando operación...')
 
                 if function == 'add':
                     client.add(a, b)

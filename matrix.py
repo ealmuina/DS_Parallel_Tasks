@@ -53,7 +53,7 @@ def vector_mult(data, row_index):
 
 def load_matrices(file):
     # TODO Implementar correctamente
-    return get_random_matrix(10, 10), get_random_matrix(10, 10)
+    return get_random_matrix(5, 1000), get_random_matrix(1000, 1000)
 
 
 if __name__ == '__main__':

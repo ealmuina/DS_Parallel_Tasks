@@ -134,9 +134,10 @@ class Worker(Node):
         """Retorna los datos correspondientes a la tarea asociada a subtask_id."""
 
         task_id = subtask_id[0]
+        key = (task_id, client_uri)
 
-        if task_id in self.cache:
-            return self.cache[task_id]
+        if key in self.cache:
+            return self.cache[key]
 
         else:
             try:
@@ -148,7 +149,7 @@ class Worker(Node):
                     self.cache.pop(d)
 
                 self.cache_timer.appendleft(task_id)
-                self.cache[task_id] = data
+                self.cache[key] = data
                 return data
 
             except PyroError:
