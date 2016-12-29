@@ -19,32 +19,29 @@ def str_matrix(a):
     return s
 
 
-def _vector_add_sub(data, subtract=False):
-    """Adiciona o resta dos vectores de igual dimensión, componente a componente."""
+def _vector_add_sub(data, row_index, subtract=False):
+    a, b = data
+    x = a[row_index]
+    y = b[row_index]
 
-    x, y = data
     result = []
     for i in range(len(x)):
         result.append(x[i] - y[i] if subtract else x[i] + y[i])
     return result
 
 
-def vector_add(data):
-    """Adiciona dos vectores de igual dimensión, componente a componente."""
-
-    return _vector_add_sub(data)
+def vector_add(data, row_index):
+    return _vector_add_sub(data, row_index)
 
 
-def vector_sub(data):
-    """Resta dos vectores de igual dimensión, componente a componente."""
-
-    return _vector_add_sub(data, True)
+def vector_sub(data, row_index):
+    return _vector_add_sub(data, row_index, True)
 
 
-def vector_mult(data):
-    """Multiplica un vector por una matriz."""
+def vector_mult(data, row_index):
+    a, m = data
+    v = a[row_index]
 
-    v, m = data
     result = [0] * len(m[0])
 
     for i in range(len(m)):

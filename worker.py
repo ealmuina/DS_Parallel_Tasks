@@ -66,12 +66,12 @@ class Worker(Node):
     def get_total_time(self):
         return self.total_time
 
-    def process(self, data, func, subtask_id, client_uri):
+    def process(self, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
 
         with self.lock:
             self.load += 1
-        self.pending_tasks.put((data, func, subtask_id, client_uri))
+        self.pending_tasks.put((func, subtask_id, client_uri))
 
     def _listen_loop(self):
         """Escucha en espera de que algún cliente solicite su uri. Cuando esto ocurre, envía la uri al cliente."""
@@ -91,13 +91,8 @@ class Worker(Node):
         """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""
 
         while True:
-            data, func, subtask_id, client_uri = self.pending_tasks.get()
-
-            if func == 'matrix.vector_mult':
-                task_data = self._get_task_data(subtask_id, client_uri)
-
-                # Si task_data es None, entonces la tarea asociada ya fue completada. Hacer data = None en tal caso
-                data = (data, task_data) if task_data else None
+            func, subtask_id, client_uri = self.pending_tasks.get()
+            data = self._get_task_data(subtask_id, client_uri)
 
             # Cargar la función indicada por el string func
             module, func = func.split('.')
@@ -106,7 +101,7 @@ class Worker(Node):
 
             if data:
                 start_time = datetime.now()
-                result = func(data)
+                result = func(data, subtask_id[1])
                 self.total_time += datetime.now() - start_time
                 self.total_operations += 1
 
@@ -136,22 +131,24 @@ class Worker(Node):
                             subtask_id), True, 'red')
 
     def _get_task_data(self, subtask_id, client_uri):
-        """Retorna los datos comunes a todas las subtareas de una tarea."""
+        """Retorna los datos correspondientes a la tarea asociada a subtask_id."""
 
-        if subtask_id[0] in self.cache:
-            return self.cache[subtask_id[0]]
+        task_id = subtask_id[0]
+
+        if task_id in self.cache:
+            return self.cache[task_id]
 
         else:
             try:
                 client = Pyro4.Proxy(client_uri)
-                data = client.get_data(subtask_id)[1]
+                data = client.get_data(subtask_id)
 
                 if len(self.cache) > Worker.MAX_CACHE_ENTRIES:
                     d = self.cache_timer.pop()
                     self.cache.pop(d)
 
-                self.cache_timer.appendleft(subtask_id[0])
-                self.cache[subtask_id[0]] = data
+                self.cache_timer.appendleft(task_id)
+                self.cache[task_id] = data
                 return data
 
             except PyroError:

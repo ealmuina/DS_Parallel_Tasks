@@ -115,8 +115,7 @@ class Client(Node):
 
                     try:
                         n = Pyro4.Proxy(uri)
-                        data = st.data if not st.func in {'matrix.vector_mult'} else st.data[0]
-                        n.process(data, st.func, (st.task.id, st.index), self.uri)
+                        n.process(st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.workers, (n.get_load(), uri))
 
                         self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
@@ -135,13 +134,13 @@ class Client(Node):
             raise ArithmeticError('Las dimensiones de las matrices deben coincidir.')
 
         # Crear nueva tarea
-        task = Task(len(a), self.task_number)
+        task = Task(len(a), self.task_number, (a, b))
         self.pending_tasks.add(task)
         self.task_number += 1
 
         # Crear subtareas para la suma de las filas correspondientes en las matrices
         for i in range(len(a)):
-            st = Subtask(task, i, (a[i], b[i]), 'matrix.vector_sub' if subtract else 'matrix.vector_add')
+            st = Subtask(task, i, 'matrix.vector_sub' if subtract else 'matrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -163,13 +162,13 @@ class Client(Node):
                 "La cantidad de columnas de la matriz 'a' debe coincidir con la cantidad de filas de 'b'.")
 
         # Crear nueva tarea
-        task = Task(len(a), self.task_number)
+        task = Task(len(a), self.task_number, (a, b))
         self.pending_tasks.add(task)
         self.task_number += 1
 
         # Crear subtareas para el producto de las filas de 'a' por la matriz 'b'
         for i in range(len(a)):
-            st = Subtask(task, i, (a[i], b), 'matrix.vector_mult')
+            st = Subtask(task, i, 'matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -228,11 +227,11 @@ class Client(Node):
                     pass
 
     def get_data(self, subtask_id):
-        """Retorna los datos correspondientes a una subtarea si no ha sido completada."""
+        """Retorna los datos correspondientes a una tarea si no ha sido completada."""
 
         if subtask_id in self.pending_subtasks_dic:
             subtask = self.pending_subtasks_dic[subtask_id]
-            return subtask.data
+            return subtask.task.data
         return None
 
 
