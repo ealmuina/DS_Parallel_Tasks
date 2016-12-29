@@ -26,7 +26,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 class Client(Node):
     SCANNER_TIMEOUT = 1  # Tiempo (segundos) de espera del socket que escanea el sistema en busca de workers
     SCANNER_INTERVAL = 10  # Tiempo (segundos) entre escaneos del sistema
-    SUBTASKS_TIMEOUT = 10  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un worker
+    SUBTASKS_TIMEOUT = 15  # Tiempo (segundos) de espera por el resultado de una operacion asignada a un worker
 
     def __init__(self):
         super().__init__()
@@ -115,7 +115,7 @@ class Client(Node):
 
                     try:
                         n = Pyro4.Proxy(uri)
-                        data = st.data if not st.func in {'*'} else st.data[0]
+                        data = st.data if not st.func in {'matrix.vector_mult'} else st.data[0]
                         n.process(data, st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.workers, (n.get_load(), uri))
 
@@ -141,7 +141,7 @@ class Client(Node):
 
         # Crear subtareas para la suma de las filas correspondientes en las matrices
         for i in range(len(a)):
-            st = Subtask(task, i, (a[i], b[i]), '-' if subtract else '+')
+            st = Subtask(task, i, (a[i], b[i]), 'matrix.vector_sub' if subtract else 'matrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -169,7 +169,7 @@ class Client(Node):
 
         # Crear subtareas para el producto de las filas de 'a' por la matriz 'b'
         for i in range(len(a)):
-            st = Subtask(task, i, (a[i], b), '*')
+            st = Subtask(task, i, (a[i], b), 'matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 

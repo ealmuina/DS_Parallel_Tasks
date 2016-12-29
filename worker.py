@@ -1,3 +1,4 @@
+import importlib
 import os
 import threading
 from collections import deque
@@ -9,7 +10,6 @@ from Pyro4 import socketutil as pyrosocket
 from Pyro4.errors import PyroError
 
 import log
-import matrix
 from node import Node
 
 Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
@@ -21,7 +21,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
 @Pyro4.expose
 class Worker(Node):
-    MAX_CACHE_SIZE = 100  # Límite de registros que puede contener la cache
+    MAX_CACHE_ENTRIES = 100  # Límite de registros que puede contener la cache
     MAX_COMPLETED_TASKS = 10  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
 
     def __init__(self):
@@ -76,7 +76,7 @@ class Worker(Node):
     def _listen_loop(self):
         """Escucha en espera de que algún cliente solicite su uri. Cuando esto ocurre, envía la uri al cliente."""
 
-        listener = pyrosocket.createBroadcastSocket(('', 5555))
+        listener = pyrosocket.createBroadcastSocket(('', 5555))  # TODO Chequear si esto funciona cambiando de red
         while True:
             try:
                 data, address = listener.recvfrom(1024)
@@ -93,16 +93,16 @@ class Worker(Node):
         while True:
             data, func, subtask_id, client_uri = self.pending_tasks.get()
 
-            if func == '+':
-                func = matrix.vector_add
-            elif func == '-':
-                func = matrix.vector_sub
-            elif func == '*':
-                func = matrix.vector_mult
+            if func == 'matrix.vector_mult':
                 task_data = self._get_task_data(subtask_id, client_uri)
 
                 # Si task_data es None, entonces la tarea asociada ya fue completada. Hacer data = None en tal caso
                 data = (data, task_data) if task_data else None
+
+            # Cargar la función indicada por el string func
+            module, func = func.split('.')
+            module = importlib.import_module(module)
+            func = getattr(module, func)
 
             if data:
                 start_time = datetime.now()
@@ -146,7 +146,7 @@ class Worker(Node):
                 client = Pyro4.Proxy(client_uri)
                 data = client.get_data(subtask_id)[1]
 
-                if len(self.cache) > Worker.MAX_CACHE_SIZE:
+                if len(self.cache) > Worker.MAX_CACHE_ENTRIES:
                     d = self.cache_timer.pop()
                     self.cache.pop(d)
 
