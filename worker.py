@@ -12,7 +12,7 @@ from Pyro4.errors import PyroError
 import log
 from node import Node
 
-Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
+Pyro4.config.COMMTIMEOUT = 15  # 15 seconds
 Pyro4.config.SERVERTYPE = "multiplex"
 
 Pyro4.config.SERIALIZER = 'pickle'
@@ -21,8 +21,8 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
 @Pyro4.expose
 class Worker(Node):
-    MAX_CACHE_ENTRIES = 100  # Límite de registros que puede contener la cache
-    MAX_COMPLETED_TASKS = 10  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
+    MAX_CACHE_ENTRIES = 1000  # Límite de registros que puede contener la cache
+    MAX_COMPLETED_TASKS = 1000  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
 
     def __init__(self):
         super().__init__()
@@ -56,7 +56,8 @@ class Worker(Node):
 
         total_time = self._total_time.total_seconds()
         avg_time = total_time / self._total_operations if total_time != 0 else 0
-        return (self.pending_tasks_count + 1) * avg_time
+        with self.lock:
+            return (self.pending_tasks_count + 1) * avg_time
 
     @property
     def ip_address(self):
@@ -111,6 +112,7 @@ class Worker(Node):
 
                 # Encolar el resultado para que sea entregado al cliente
                 self.completed_tasks.put((result, subtask_id, client_uri))
+                self.log.report('Resultado de la subtarea %s listo' % str(subtask_id), True)
 
             # Tarea completada. Decrementar la cantidad de tareas pendientes
             with self.lock:
