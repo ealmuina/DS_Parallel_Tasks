@@ -86,8 +86,8 @@ class Client(Node):
 
             except OSError as e:
                 if e.errno == 101:
-                    # Network is disconnected. Just try again when things get resolved.
-                    continue
+                    # Network is disconnected. Local worker will be the only one used
+                    updated_nodes.append((self.worker.load, self.worker.uri))
 
             heapq.heapify(updated_nodes)
             with self.lock:

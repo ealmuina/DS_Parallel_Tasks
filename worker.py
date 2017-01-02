@@ -55,7 +55,7 @@ class Worker(Node):
          de completar y el tiempo promedio que demora en completar una."""
 
         total_time = self._total_time.total_seconds()
-        avg_time = total_time / self._total_operations if total_time != 0 else 1
+        avg_time = total_time / self._total_operations if total_time != 0 else 0
         return (self.pending_tasks_count + 1) * avg_time
 
     @property
