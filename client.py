@@ -129,7 +129,6 @@ class Client(Node):
                         heapq.heappush(self.workers, (n.load, uri))
 
                         self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
-                        print(n.load)
 
                     except PyroError:
                         self.log.report(

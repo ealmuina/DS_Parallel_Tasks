@@ -115,8 +115,8 @@ class Worker(Node):
                 try:
                     start_time = datetime.now()
                     client = Pyro4.Proxy(client_uri)
-                    client = Pyro4.async(client).wait(100)
-                    client.report(subtask_id, result)
+                    client = Pyro4.async(client)
+                    client.report(subtask_id, result).wait(100)
                     self._total_time += datetime.now() - start_time
 
                     # Tarea completada y entregado el resultado. Decrementar la cantidad de tareas pendientes
