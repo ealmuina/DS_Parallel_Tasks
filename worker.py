@@ -112,11 +112,7 @@ class Worker(Node):
 
                 # Encolar el resultado para que sea entregado al cliente
                 self.completed_tasks.put((result, subtask_id, client_uri))
-                self.log.report('Resultado de la subtarea %s listo' % str(subtask_id), True)
-
-            # Tarea completada. Decrementar la cantidad de tareas pendientes
-            with self.lock:
-                self.pending_tasks_count -= 1
+                self.log.report('Resultado de la subtarea %s listo' % str(subtask_id))
 
     def _deliver_loop(self):
         while True:
@@ -127,7 +123,12 @@ class Worker(Node):
                 client = Pyro4.Proxy(client_uri)
                 client.report(subtask_id, result)
                 self._total_time += datetime.now() - start_time
-                self.log.report('El resultado de la operación %s fue entregado' % str(subtask_id), True, 'green')
+
+                # Tarea completada. Decrementar la cantidad de tareas pendientes
+                with self.lock:
+                    self.pending_tasks_count -= 1
+
+                self.log.report('El resultado de la operación %s fue entregado' % str(subtask_id))
 
             except PyroError:
                 if len(self.completed_tasks.queue) < Worker.MAX_COMPLETED_TASKS:
