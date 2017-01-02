@@ -42,15 +42,14 @@ class Worker(Node):
         self._total_time = timedelta()
 
         threading.Thread(target=self._listen_loop).start()
-        # threading.Thread(target=self._deliver_loop).start()
+        threading.Thread(target=self._deliver_loop).start()
 
         for i in range(os.cpu_count()):
             threading.Thread(target=self._process_loop).start()
 
         self.log.report('Worker inicializado con %d hilos procesando solicitudes.' % os.cpu_count(), True)
 
-    @property
-    def load(self):
+    def get_load(self):
         """Retorna la 'carga' del worker, expresada como el producto de la cantidad de operaciones que tiene pendientes
          de completar y el tiempo promedio que demora en completar una."""
 
@@ -59,16 +58,13 @@ class Worker(Node):
         with self.lock:
             return (self.pending_tasks_count + 1) * avg_time
 
-    @property
-    def ip_address(self):
+    def get_ip_address(self):
         return self.ip
 
-    @property
-    def total_operations(self):
+    def get_total_operations(self):
         return self._total_operations
 
-    @property
-    def total_time(self):
+    def get_total_time(self):
         return self._total_time
 
     def process(self, func, subtask_id, client_uri):
@@ -110,25 +106,8 @@ class Worker(Node):
                 self._total_time += datetime.now() - start_time
                 self._total_operations += 1
 
-                # Encolar el resultado para que sea entregado al cliente TODO arreglar
-
-                try:
-                    start_time = datetime.now()
-                    client = Pyro4.Proxy(client_uri)
-                    client = Pyro4.async(client)
-                    client.report(subtask_id, result).wait(100)
-                    self._total_time += datetime.now() - start_time
-
-                    # Tarea completada y entregado el resultado. Decrementar la cantidad de tareas pendientes
-                    with self.lock:
-                        self.pending_tasks_count -= 1
-
-                    self.log.report('El resultado de la operación %s fue entregado' % str(subtask_id))
-
-                except PyroError:
-                    pass
-
-                # self.completed_tasks.put((result, subtask_id, client_uri))
+                # Encolar el resultado para que sea entregado al cliente
+                self.completed_tasks.put((result, subtask_id, client_uri))
                 self.log.report('Resultado de la subtarea %s listo' % str(subtask_id))
 
     def _deliver_loop(self):

@@ -77,7 +77,7 @@ class Client(Node):
 
                     try:
                         current_node = Pyro4.Proxy(uri)
-                        updated_nodes.append((current_node.load, uri))
+                        updated_nodes.append((current_node.get_load(), uri))
 
                     except PyroError:
                         # If received data isn't a valid uri,
@@ -126,7 +126,7 @@ class Client(Node):
                     try:
                         n = Pyro4.Proxy(uri)
                         n.process(st.func, (st.task.id, st.index), self.uri)
-                        heapq.heappush(self.workers, (n.load, uri))
+                        heapq.heappush(self.workers, (n.get_load(), uri))
 
                         self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
 
@@ -186,9 +186,11 @@ class Client(Node):
             for load, uri in self.workers:
                 try:
                     n = Pyro4.Proxy(uri)
-                    avg_time = n.total_time / n.total_operations if n.total_operations != 0 else 0
+                    total_time = n.get_total_time()
+                    total_operations = n.get_total_operations()
+                    avg_time = total_time / total_operations if total_operations != 0 else 0
 
-                    print(n.ip_address, n.total_operations, n.total_time, avg_time, sep='\t')
+                    print(n.ip_address, total_operations, total_time, avg_time, sep='\t')
 
                 except PyroError:
                     # Connection to worker couldn't be completed
