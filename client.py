@@ -26,8 +26,8 @@ class Client(Node):
     """
 
     SCANNER_TIMEOUT = 1  # Time (seconds) waiting for responses on the system scanner socket
-    SCANNER_INTERVAL = 30  # Time (seconds) elapsed between system scans
-    SUBTASKS_TIMEOUT = 60  # Time (seconds) waiting for assigned sub-tasks result
+    SCANNER_INTERVAL = 15  # Time (seconds) elapsed between system scans
+    SUBTASKS_TIMEOUT = 30  # Time (seconds) waiting for assigned sub-tasks result
 
     def __init__(self):
         super().__init__()
@@ -77,7 +77,7 @@ class Client(Node):
 
                     try:
                         current_node = Pyro4.Proxy(uri)
-                        updated_nodes.append((current_node.get_load(), uri))
+                        updated_nodes.append((current_node.load, uri))
 
                     except PyroError:
                         # If received data isn't a valid uri,
@@ -126,7 +126,7 @@ class Client(Node):
                     try:
                         n = Pyro4.Proxy(uri)
                         n.process(st.func, (st.task.id, st.index), self.uri)
-                        heapq.heappush(self.workers, (n.get_load(), uri))
+                        heapq.heappush(self.workers, (n.load, uri))
 
                         self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
 
@@ -161,9 +161,10 @@ class Client(Node):
         current_task.result[subtask.index] = result
 
         # Verify is task is now completed
-        current_task.completed = True
-        for x in current_task.result:
-            current_task.completed = current_task.completed and x
+        current_task.completed_subtasks += 1
+        current_task.completed = current_task.completed_subtasks == len(current_task.result)
+        self.log.report('Tarea %s completada al %s/100' %
+                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))))
 
         if current_task.completed:
             # Save task's result in file <current_task.id>.txt
@@ -186,8 +187,8 @@ class Client(Node):
             for load, uri in self.workers:
                 try:
                     n = Pyro4.Proxy(uri)
-                    total_time = n.get_total_time()
-                    total_operations = n.get_total_operations()
+                    total_time = n.total_time
+                    total_operations = n.total_operations
                     avg_time = total_time / total_operations if total_operations != 0 else 0
 
                     print(n.ip_address, total_operations, total_time, avg_time, sep='\t')

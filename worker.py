@@ -49,22 +49,26 @@ class Worker(Node):
 
         self.log.report('Worker inicializado con %d hilos procesando solicitudes.' % os.cpu_count(), True)
 
-    def get_load(self):
+    @property
+    def load(self):
         """Retorna la 'carga' del worker, expresada como el producto de la cantidad de operaciones que tiene pendientes
          de completar y el tiempo promedio que demora en completar una."""
 
         total_time = self._total_time.total_seconds()
-        avg_time = total_time / self._total_operations if total_time != 0 else 0
+        avg_time = total_time / self._total_operations if self._total_operations != 0 else 0
         with self.lock:
             return (self.pending_tasks_count + 1) * avg_time
 
-    def get_ip_address(self):
+    @property
+    def ip_address(self):
         return self.ip
 
-    def get_total_operations(self):
+    @property
+    def total_operations(self):
         return self._total_operations
 
-    def get_total_time(self):
+    @property
+    def total_time(self):
         return self._total_time
 
     def process(self, func, subtask_id, client_uri):

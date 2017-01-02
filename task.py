@@ -8,6 +8,7 @@ class Task:
 
     def __init__(self, length, task_id, data):
         self.completed = False
+        self.completed_subtasks = 0
         self.result = [None] * length
         self.id = task_id
         self.time = datetime.now()
