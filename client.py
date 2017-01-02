@@ -184,7 +184,7 @@ class Client(Node):
 
         print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
         with self.lock:
-            for load, uri in self.workers_set:
+            for uri in self.workers_set:
                 try:
                     n = Pyro4.Proxy(uri)
                     avg_time = n.total_time / n.total_operations if n.total_operations != 0 else 0
