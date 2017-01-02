@@ -3,6 +3,11 @@ import socket
 
 
 def get_ip():
+    """
+    Return the ip address of the current machine.
+    :return: String with the ip address
+    """
+
     if os.name == 'nt':
         return socket.gethostbyname(socket.gethostname())
     else:

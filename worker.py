@@ -34,12 +34,12 @@ class Worker(Node):
         self.cache = {}
         self.cache_timer = deque()  # Conserva los registros en el orden en que fueron insertados en la cache
 
-        self.load = 0  # Total de operaciones pendientes
-        self.lock = threading.Lock()  # Lock para el uso de self.load
+        self.pending_tasks_count = 0  # Total de operaciones pendientes
+        self.lock = threading.Lock()  # Lock para el uso de self.pending_tasks_count
 
         # Datos relativos al total de operaciones realizadas y el tiempo requerido para completarlas
-        self.total_operations = 0
-        self.total_time = timedelta()
+        self._total_operations = 0
+        self._total_time = timedelta()
 
         threading.Thread(target=self._listen_loop).start()
         threading.Thread(target=self._deliver_loop).start()
@@ -49,28 +49,32 @@ class Worker(Node):
 
         self.log.report('Worker inicializado con %d hilos procesando solicitudes.' % os.cpu_count(), True)
 
-    def get_load(self):
+    @property
+    def load(self):
         """Retorna la 'carga' del worker, expresada como el producto de la cantidad de operaciones que tiene pendientes
          de completar y el tiempo promedio que demora en completar una."""
 
-        total_time = self.total_time.total_seconds()
-        avg_time = total_time / self.total_operations if total_time != 0 else 1
-        return (self.load + 1) * avg_time
+        total_time = self._total_time.total_seconds()
+        avg_time = total_time / self._total_operations if total_time != 0 else 1
+        return (self.pending_tasks_count + 1) * avg_time
 
-    def get_ip(self):
+    @property
+    def ip_address(self):
         return self.ip
 
-    def get_total_operations(self):
-        return self.total_operations
+    @property
+    def total_operations(self):
+        return self._total_operations
 
-    def get_total_time(self):
-        return self.total_time
+    @property
+    def total_time(self):
+        return self._total_time
 
     def process(self, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
 
         with self.lock:
-            self.load += 1
+            self.pending_tasks_count += 1
         self.pending_tasks.put((func, subtask_id, client_uri))
 
     def _listen_loop(self):
@@ -102,15 +106,15 @@ class Worker(Node):
             if data:
                 start_time = datetime.now()
                 result = func(data, subtask_id[1])
-                self.total_time += datetime.now() - start_time
-                self.total_operations += 1
+                self._total_time += datetime.now() - start_time
+                self._total_operations += 1
 
                 # Encolar el resultado para que sea entregado al cliente
                 self.completed_tasks.put((result, subtask_id, client_uri))
 
             # Tarea completada. Decrementar la cantidad de tareas pendientes
             with self.lock:
-                self.load -= 1
+                self.pending_tasks_count -= 1
 
     def _deliver_loop(self):
         while True:
@@ -120,7 +124,7 @@ class Worker(Node):
                 start_time = datetime.now()
                 client = Pyro4.Proxy(client_uri)
                 client.report(subtask_id, result)
-                self.total_time += datetime.now() - start_time
+                self._total_time += datetime.now() - start_time
 
             except PyroError:
                 if len(self.completed_tasks.queue) < Worker.MAX_COMPLETED_TASKS:

@@ -6,52 +6,82 @@ from task import Task, Subtask
 
 
 class MatrixClient(Client):
+    """
+    Specific implementation of Client to use the system for matrices operations.
+    """
+
     def _add_sub(self, a, b, subtract=False):
-        """Adiciona o resta dos matrices"""
+        """
+        Add or subtract two matrices.
+        :param a: matrix 1
+        :param b: matrix 2
+        :param subtract: Boolean indicating if operation executed will be addition (False) or subtraction (True)
+        This method is intended to schedule the operation, not to return its result immediately.
+        """
 
         if len(a) != len(b):
             raise ArithmeticError('Las dimensiones de las matrices deben coincidir.')
 
-        # Crear nueva tarea
+        # Create a new task
         task = Task(len(a), self.task_number, (a, b))
         self.pending_tasks.add(task)
         self.task_number += 1
 
-        # Crear subtareas para la suma de las filas correspondientes en las matrices
+        # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
             st = Subtask(task, i, 'matrix.vector_sub' if subtract else 'matrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
     def add(self, a, b):
-        """Adiciona dos matrices."""
+        """
+        Add two matrices.
+        :param a: matrix 1
+        :param b: matrix 2
+        :return: This method is intended to schedule the operation, not to return its result immediately.
+        """
 
         self._add_sub(a, b)
 
     def sub(self, a, b):
-        """Resta dos matrices."""
+        """
+        Subtract two matrices.
+        :param a: matrix 1
+        :param b: matrix 2
+        :return: This method is intended to schedule the operation, not to return its result immediately.
+        """
 
         self._add_sub(a, b, True)
 
     def mult(self, a, b):
-        """Multiplica dos matrices."""
+        """
+        Multiply two matrices.
+        :param a: matrix 1
+        :param b: matrix 2
+        :return: This method is intended to schedule the operation, not to return its result immediately.
+        """
 
         if len(a[0]) != len(b):
             raise ArithmeticError(
                 "La cantidad de columnas de la matriz 'a' debe coincidir con la cantidad de filas de 'b'.")
 
-        # Crear nueva tarea
+        # Create a new task
         task = Task(len(a), self.task_number, (a, b))
         self.pending_tasks.add(task)
         self.task_number += 1
 
-        # Crear subtareas para el producto de las filas de 'a' por la matriz 'b'
+        # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
             st = Subtask(task, i, 'matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
     def save_result(self, task):
+        """
+        Save a task's results to a file.
+        :param task: Task whose results will be saved
+        """
+
         os.makedirs('results', exist_ok=True)
         file_result = open('results/%s.txt' % task.id, 'w')
         file_result.write(matrix.str_matrix(task.result))
@@ -76,10 +106,10 @@ if __name__ == '__main__':
                 if function == 'add':
                     client.add(a, b)
 
-                elif function == 'subtract':
+                elif function == 'sub':
                     client.sub(a, b)
 
-                elif function == 'product':
+                elif function == 'mult':
                     client.mult(a, b)
 
                 else:
