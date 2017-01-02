@@ -1,7 +1,8 @@
+import heapq
 import threading
 import time
 from datetime import datetime
-from queue import Queue, PriorityQueue
+from queue import Queue
 
 import Pyro4
 from Pyro4 import socketutil as pyrosocket
@@ -31,9 +32,8 @@ class Client(Node):
     def __init__(self):
         super().__init__()
 
-        self.workers_heap = PriorityQueue()  # Accessible workers URI, prioritized by their load; stored as (load, URI)
-        self.workers_set = set()  # Also save URIs on a set to allow fast finding them
-        self.lock = threading.Lock()  # Lock for the concurrent use of self.workers_set
+        self.workers = []  # Accessible workers URI, prioritized by their load; stored as (load, URI)
+        self.lock = threading.Lock()  # Lock for the concurrent use of self.workers
 
         self.worker = Worker()  # System worker corresponding to this machine
 
@@ -63,7 +63,7 @@ class Client(Node):
             scanner = pyrosocket.createBroadcastSocket()
             scanner.settimeout(Client.SCANNER_TIMEOUT)
 
-            new_workers = 0  # amount of new workers detected
+            updated_nodes = []
             try:
                 scanner.sendto(b'SCANNING', ('255.255.255.255', 5555))
                 while True:
@@ -77,12 +77,7 @@ class Client(Node):
 
                     try:
                         current_node = Pyro4.Proxy(uri)
-
-                        if uri not in self.workers_set:
-                            self.workers_heap.put((current_node.load, uri))
-                            with self.lock:
-                                self.workers_set.add(uri)
-                            new_workers += 1
+                        updated_nodes.append((current_node.load, uri))
 
                     except PyroError:
                         # If received data isn't a valid uri,
@@ -94,7 +89,13 @@ class Client(Node):
                     # Network is disconnected. Just try again when things get resolved.
                     continue
 
-            self.log.report('Sistema escaneado. Se detectaron %d nuevos workers.' % new_workers)
+            heapq.heapify(updated_nodes)
+            with self.lock:
+                self.workers.clear()
+                for n in updated_nodes:
+                    self.workers.append(n)
+
+            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_nodes))
             time.sleep(Client.SCANNER_INTERVAL)  # rest some time before next scan
 
     def _subtasks_checker_loop(self):
@@ -105,7 +106,7 @@ class Client(Node):
         """
 
         while True:
-            if self.workers_heap.empty():
+            if len(self.workers) == 0:
                 # No worker has been found on the system.
                 continue
 
@@ -118,23 +119,21 @@ class Client(Node):
 
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
                 # Wait time exceeded, assign sub-task to a new worker
-                load, uri = self.workers_heap.get()
-                st.time = datetime.now()
+                with self.lock:
+                    load, uri = heapq.heappop(self.workers)
+                    st.time = datetime.now()
 
-                try:
-                    n = Pyro4.Proxy(uri)
-                    n.process(st.func, (st.task.id, st.index), self.uri)
-                    self.workers_heap.put((n.load, uri))
+                    try:
+                        n = Pyro4.Proxy(uri)
+                        n.process(st.func, (st.task.id, st.index), self.uri)
+                        heapq.heappush(self.workers, (n.load, uri))
 
-                    self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
 
-                except PyroError:
-                    with self.lock:
-                        self.workers_set.remove(uri)
-
-                    self.log.report(
-                        'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % uri,
-                        True, 'red')
+                    except PyroError:
+                        self.log.report(
+                            'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % uri,
+                            True, 'red')
 
             self.pending_subtasks.put((st.time, st))
 
@@ -184,7 +183,7 @@ class Client(Node):
 
         print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
         with self.lock:
-            for uri in self.workers_set:
+            for load, uri in self.workers:
                 try:
                     n = Pyro4.Proxy(uri)
                     avg_time = n.total_time / n.total_operations if n.total_operations != 0 else 0
