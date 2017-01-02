@@ -10,13 +10,16 @@ class Log:
     def __init__(self, name):
         self.name = name
 
-    def report(self, message, on_console=False, message_type=None):
+    def report(self, message, write_message=False, message_type=None):
         """
-        Emit a report to the log's file.
+        Emit a report to the log's file if indicated.
         :param message: String of text to be reported
-        :param on_console: Boolean value to indicate if message will be also reported on console
+        :param write_message: Boolean value to indicate if message will be actually written on log
         :param message_type: String with value in ('red', 'green') indicating text color on console, if provided.
         """
+
+        if not write_message:
+            return None
 
         os.makedirs('logs', exist_ok=True)
         file = open('logs/' + self.name + '_log.txt', 'a')
@@ -25,12 +28,11 @@ class Log:
         file.write(s + '\n')
         file.close()
 
-        if on_console:
-            if message_type == 'red':
-                s = '\x1b[6;30;41m' + s + '\x1b[0m'
-            elif message_type == 'green':
-                s = '\x1b[6;30;42m' + s + '\x1b[0m'
-            print(s)
+        if message_type == 'red':
+            s = '\x1b[6;30;41m' + s + '\x1b[0m'
+        elif message_type == 'green':
+            s = '\x1b[6;30;42m' + s + '\x1b[0m'
+        print(s)
 
 
 if __name__ == '__main__':

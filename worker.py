@@ -12,7 +12,7 @@ from Pyro4.errors import PyroError
 import log
 from node import Node
 
-Pyro4.config.COMMTIMEOUT = 15  # 15 seconds
+Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
 Pyro4.config.SERVERTYPE = "multiplex"
 
 Pyro4.config.SERIALIZER = 'pickle'
@@ -121,10 +121,11 @@ class Worker(Node):
             try:
                 start_time = datetime.now()
                 client = Pyro4.Proxy(client_uri)
+                client = Pyro4.async(client)
                 client.report(subtask_id, result)
                 self._total_time += datetime.now() - start_time
 
-                # Tarea completada. Decrementar la cantidad de tareas pendientes
+                # Tarea completada y entregado el resultado. Decrementar la cantidad de tareas pendientes
                 with self.lock:
                     self.pending_tasks_count -= 1
 

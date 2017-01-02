@@ -12,7 +12,7 @@ import log
 from node import Node
 from worker import Worker
 
-Pyro4.config.COMMTIMEOUT = 15  # 15 seconds
+Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
 Pyro4.config.SERVERTYPE = "multiplex"
 
 Pyro4.config.SERIALIZER = 'pickle'
@@ -128,7 +128,7 @@ class Client(Node):
                         n.process(st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.workers, (n.load, uri))
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri), True)
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
                         print(n.load)
 
                     except PyroError:
