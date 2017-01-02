@@ -12,7 +12,7 @@ import log
 from node import Node
 from worker import Worker
 
-Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
+Pyro4.config.COMMTIMEOUT = 15  # 15 seconds
 Pyro4.config.SERVERTYPE = "multiplex"
 
 Pyro4.config.SERIALIZER = 'pickle'
@@ -25,9 +25,9 @@ class Client(Node):
     Base class to inherit from when implementing a client program for using the Parallel Tasks system.
     """
 
-    SCANNER_TIMEOUT = 1  # Time (seconds) waiting for the system scanner socket
-    SCANNER_INTERVAL = 10  # Time (seconds) elapsed between system scans
-    SUBTASKS_TIMEOUT = 30  # Time (seconds) waiting for assigned sub-tasks result
+    SCANNER_TIMEOUT = 1  # Time (seconds) waiting for responses on the system scanner socket
+    SCANNER_INTERVAL = 30  # Time (seconds) elapsed between system scans
+    SUBTASKS_TIMEOUT = 60  # Time (seconds) waiting for assigned sub-tasks result
 
     def __init__(self):
         super().__init__()
@@ -128,7 +128,7 @@ class Client(Node):
                         n.process(st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.workers, (n.load, uri))
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri), True)
 
                     except PyroError:
                         self.log.report(
