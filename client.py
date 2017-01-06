@@ -1,4 +1,7 @@
 import heapq
+import ipaddress
+import os
+import select
 import threading
 import time
 from datetime import datetime
@@ -52,50 +55,100 @@ class Client(Node):
     def _scan_loop(self):
         """
         Scan the system seeking for workers, and keep updated the priority queue with them.
+        It broadcasts a known message on the network and to user-specified ip addresses on the 'ips.conf' file.
         It's intended to run 'forever' on a separated thread.
         """
 
         while True:
             # Create a broadcast socket and send through it the word 'SCANNING'. Every worker that receive it should
             # respond back with its URI
-            # All of the received uris will be put in a list first before further processing
+            # All of the received uris will be put in a set first before further processing
 
-            scanner = pyrosocket.createBroadcastSocket()
-            scanner.settimeout(Client.SCANNER_TIMEOUT)
+            scanner = pyrosocket.createBroadcastSocket(timeout=Client.SCANNER_TIMEOUT)
 
+            uris = set()
             updated_nodes = []
+
             try:
                 scanner.sendto(b'SCANNING', ('255.255.255.255', 5555))
                 while True:
-                    try:
-                        data, address = scanner.recvfrom(1024)
-                    except ConnectionResetError:
-                        # Connection closed. Continue iteration
-                        continue
-
-                    uri = data.decode()
-
-                    try:
-                        current_node = Pyro4.Proxy(uri)
-                        updated_nodes.append((current_node.load, uri))
-
-                    except PyroError:
-                        # If received data isn't a valid uri,
-                        # this exception will be thrown while trying to create a proxy
-                        continue
-
+                    uri = scanner.recv(1024).decode()  # TODO Removed a try block that catches ConnectionResetError
+                    uris.add(uri)
             except OSError as e:
+                scanner.close()
+
                 if e.errno == 101:
                     # Network is disconnected. Local worker will be the only one used
                     updated_nodes.append((self.worker.load, self.worker.uri))
 
+                else:
+                    # Timeout expired. Subnet broadcast-scanning successful.
+                    # Scan IP addresses read from ips.conf file if exists
+
+                    if not os.path.exists('ips.conf'):
+                        with open('ips.conf', 'w') as ips:
+                            ips.write("# You can put in this file known workers IP addresses or networks to use.\n" +
+                                      "# Please don't let empty lines.")
+
+                    scanner = pyrosocket.createBroadcastSocket()
+                    with open('ips.conf') as ips:
+                        while True:
+                            read, write, error = select.select([scanner], [scanner], [scanner])
+
+                            while len(read) > 0:
+                                uri = scanner.recv(1024).decode()
+                                uris.add(uri)
+                                read, write, error = select.select([scanner], [scanner], [scanner])
+
+                            if len(write) > 0:
+                                line = ips.readline()
+                                if line == '':
+                                    # ips.conf file reading completed
+                                    break
+
+                                try:
+                                    if '/' in line:
+                                        # Network
+                                        net = ipaddress.IPv4Network(line)
+                                        line_ips = net.hosts()
+                                    else:
+                                        # Single ip address
+                                        line_ips = [ipaddress.ip_address(line)]
+                                except ValueError:
+                                    # Invalid entry in ips.conf.
+                                    continue
+
+                                for ip in line_ips:
+                                    scanner.sendto(b'SCANNING', (str(ip), 5555))
+
+                        # Finish reading late responses
+                        scanner.settimeout(Client.SCANNER_TIMEOUT)
+                        while True:
+                            try:
+                                uri = scanner.recv(1024).decode()
+                                uris.add(uri)
+                            except OSError:
+                                # Timeout expired
+                                scanner.close()
+                                break
+
+                    # Create list with tuples of found workers and their loads
+                    for uri in uris:
+                        try:
+                            worker = Pyro4.Proxy(uri)
+                            updated_nodes.append((worker.load, uri))
+                        except PyroError:
+                            # Invalid uri or lost connection
+                            continue
+
+            # Update client's knowledge of system workers
             heapq.heapify(updated_nodes)
             with self.lock:
                 self.workers.clear()
                 for n in updated_nodes:
                     self.workers.append(n)
 
-            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_nodes))
+            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_nodes), True)
             time.sleep(Client.SCANNER_INTERVAL)  # rest some time before next scan
 
     def _subtasks_checker_loop(self):
