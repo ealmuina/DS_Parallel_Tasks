@@ -129,8 +129,9 @@ class Worker(Node):
 
                 self.log.report('El resultado de la operación %s fue entregado' % str(subtask_id))
 
-            except Pyro4.errors.TimeoutError:
-                # Timeout expired. Save results if possible and try again later
+            except Pyro4.errors.PyroError:
+                # TimeoutError, ConnectionClosedError
+                # Save results if possible and try again later
 
                 if len(self.completed_tasks.queue) < Worker.MAX_COMPLETED_TASKS:
                     self.completed_tasks.put((result, subtask_id, client_uri))
@@ -162,8 +163,9 @@ class Worker(Node):
                 self.cache[key] = data
                 return data
 
-            except Pyro4.errors.TimeoutError:
-                # Timeout expired. Cliente no diponible. Dar por completada la operación
+            except Pyro4.errors.PyroError:
+                # TimeoutError, ConnectionClosedError
+                # Cliente no diponible. Dar por completada la operación
                 return None
 
 

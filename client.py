@@ -140,8 +140,8 @@ class Client(Node):
                         except TypeError:
                             # Invalid uri
                             continue
-                        except Pyro4.errors.TimeoutError:
-                            # Communication timeout expired
+                        except Pyro4.errors.PyroError:
+                            # TimeoutError, ConnectionClosedError
                             continue
 
             # Update client's knowledge of system workers
@@ -187,10 +187,10 @@ class Client(Node):
                         n.process(st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.workers, (n.load, uri))
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri), True)
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
 
-                    except Pyro4.errors.TimeoutError:
-                        # Communication timeout expired
+                    except Pyro4.errors.PyroError:
+                        # TimeoutError, ConnectionClosedError
                         self.log.report(
                             'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % uri,
                             True, 'red')
@@ -224,7 +224,7 @@ class Client(Node):
         current_task.completed_subtasks += 1
         current_task.completed = current_task.completed_subtasks == len(current_task.result)
         self.log.report('Tarea %s completada al %s/100' %
-                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))), True)
+                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))))
 
         if current_task.completed:
             # Save task's result in file <current_task.id>.txt
