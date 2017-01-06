@@ -6,14 +6,14 @@ from datetime import datetime, timedelta
 from queue import Queue
 
 import Pyro4
+import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
-from Pyro4.errors import PyroError
 
 import log
 from node import Node
 
-Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
-Pyro4.config.SERVERTYPE = "multiplex"
+# Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
+# Pyro4.config.SERVERTYPE = "multiplex"
 
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
@@ -55,7 +55,7 @@ class Worker(Node):
          de completar y el tiempo promedio que demora en completar una."""
 
         total_time = self._total_time.total_seconds()
-        avg_time = total_time / self._total_operations if self._total_operations != 0 else 0
+        avg_time = total_time / self._total_operations if self._total_operations != 0 else 1
         with self.lock:
             return (self.pending_tasks_count + 1) * avg_time
 
@@ -83,11 +83,7 @@ class Worker(Node):
 
         listener = pyrosocket.createBroadcastSocket(('', 5555))  # TODO Chequear si esto funciona cambiando de red
         while True:
-            try:
-                data, address = listener.recvfrom(1024)
-            except ConnectionResetError:
-                # Se cerró la conexión antes de tiempo. Continuar iterando
-                continue
+            data, address = listener.recvfrom(1024)  # TODO Removed a try block that catches ConnectionResetError
 
             if data.decode() == 'SCANNING':
                 listener.sendto(self.uri.encode(), address)
@@ -120,8 +116,10 @@ class Worker(Node):
 
             try:
                 start_time = datetime.now()
+
                 client = Pyro4.Proxy(client_uri)
-                client = Pyro4.async(client)
+                client._pyroTimeout = Node.PYRO_TIMEOUT
+
                 client.report(subtask_id, result)
                 self._total_time += datetime.now() - start_time
 
@@ -131,7 +129,9 @@ class Worker(Node):
 
                 self.log.report('El resultado de la operación %s fue entregado' % str(subtask_id))
 
-            except PyroError:
+            except Pyro4.errors.TimeoutError:
+                # Timeout expired. Save results if possible and try again later
+
                 if len(self.completed_tasks.queue) < Worker.MAX_COMPLETED_TASKS:
                     self.completed_tasks.put((result, subtask_id, client_uri))
                 else:
@@ -151,6 +151,7 @@ class Worker(Node):
         else:
             try:
                 client = Pyro4.Proxy(client_uri)
+                client._pyroTimeout = Node.PYRO_TIMEOUT
                 data = client.get_data(subtask_id)
 
                 if len(self.cache) > Worker.MAX_CACHE_ENTRIES:
@@ -161,8 +162,8 @@ class Worker(Node):
                 self.cache[key] = data
                 return data
 
-            except PyroError:
-                # Cliente no diponible. Dar por completada la operación
+            except Pyro4.errors.TimeoutError:
+                # Timeout expired. Cliente no diponible. Dar por completada la operación
                 return None
 
 

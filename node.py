@@ -8,6 +8,7 @@ import utils
 
 class Node():
     CHECK_IP_INTERVAL = 5  # Tiempo (segundos) transcurrido el cual se verificará si la IP sigue siendo la misma.
+    PYRO_TIMEOUT = 5
 
     def __init__(self):
         self.ip = utils.get_ip()

@@ -8,15 +8,15 @@ from datetime import datetime
 from queue import Queue
 
 import Pyro4
+import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
-from Pyro4.errors import PyroError
 
 import log
 from node import Node
 from worker import Worker
 
-Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
-Pyro4.config.SERVERTYPE = "multiplex"
+# Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
+# Pyro4.config.SERVERTYPE = "multiplex"
 
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
@@ -135,9 +135,13 @@ class Client(Node):
                     for uri in uris:
                         try:
                             worker = Pyro4.Proxy(uri)
+                            worker._pyroTimeout = Node.PYRO_TIMEOUT
                             updated_nodes.append((worker.load, uri))
-                        except PyroError:
-                            # Invalid uri or lost connection
+                        except TypeError:
+                            # Invalid uri
+                            continue
+                        except Pyro4.errors.TimeoutError:
+                            # Communication timeout expired
                             continue
 
             # Update client's knowledge of system workers
@@ -147,7 +151,7 @@ class Client(Node):
                 for n in updated_nodes:
                     self.workers.append(n)
 
-            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_nodes), True)
+            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_nodes))
             time.sleep(Client.SCANNER_INTERVAL)  # rest some time before next scan
 
     def _subtasks_checker_loop(self):
@@ -177,12 +181,16 @@ class Client(Node):
 
                     try:
                         n = Pyro4.Proxy(uri)
+                        n._pyroTimeout = Node.PYRO_TIMEOUT
+                        n._pyroOneway.add('process')  # We don't need to wait for calls to n.process now
+
                         n.process(st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.workers, (n.load, uri))
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri), True)
 
-                    except PyroError:
+                    except Pyro4.errors.TimeoutError:
+                        # Communication timeout expired
                         self.log.report(
                             'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % uri,
                             True, 'red')
@@ -216,7 +224,7 @@ class Client(Node):
         current_task.completed_subtasks += 1
         current_task.completed = current_task.completed_subtasks == len(current_task.result)
         self.log.report('Tarea %s completada al %s/100' %
-                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))))
+                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))), True)
 
         if current_task.completed:
             # Save task's result in file <current_task.id>.txt
@@ -239,14 +247,16 @@ class Client(Node):
             for load, uri in self.workers:
                 try:
                     n = Pyro4.Proxy(uri)
+                    n._pyroTimeout = Node.PYRO_TIMEOUT
+
                     total_time = n.total_time
                     total_operations = n.total_operations
                     avg_time = total_time / total_operations if total_operations != 0 else 0
 
                     print(n.ip_address, total_operations, total_time, avg_time, sep='\t')
 
-                except PyroError:
-                    # Connection to worker couldn't be completed
+                except Pyro4.errors.TimeoutError:
+                    # Timeout expired. Connection to worker couldn't be completed
                     pass
 
     def get_data(self, subtask_id):
