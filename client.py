@@ -110,16 +110,15 @@ class Client(Node):
                                     if '/' in line:
                                         # Network
                                         net = ipaddress.IPv4Network(line)
-                                        line_ips = net.hosts()
+                                        ip = net.broadcast_address
                                     else:
                                         # Single ip address
-                                        line_ips = [ipaddress.ip_address(line)]
+                                        ip = ipaddress.ip_address(line)
                                 except ValueError:
                                     # Invalid entry in ips.conf.
                                     continue
 
-                                for ip in line_ips:
-                                    scanner.sendto(b'SCANNING', (str(ip), 5555))
+                                scanner.sendto(b'SCANNING', (str(ip), 5555))
 
                         # Finish reading late responses
                         scanner.settimeout(Client.SCANNER_TIMEOUT)
