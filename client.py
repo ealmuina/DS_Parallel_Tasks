@@ -13,6 +13,7 @@ from Pyro4 import socketutil as pyrosocket
 
 import log
 from node import Node
+from worker import Worker
 
 Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
@@ -27,7 +28,7 @@ class Client(Node):
 
     SCANNER_TIMEOUT = 1  # Time (seconds) waiting for responses on the system scanner socket
     SCANNER_INTERVAL = 15  # Time (seconds) elapsed between system scans
-    SUBTASKS_TIMEOUT = 300  # Time (seconds) waiting for assigned sub-tasks result
+    SUBTASKS_TIMEOUT = 30  # Time (seconds) waiting for assigned sub-tasks result
 
     def __init__(self):
         super().__init__()
@@ -35,7 +36,7 @@ class Client(Node):
         self.workers = []  # Accessible workers URI, prioritized by their load; stored as (load, URI)
         self.lock = threading.Lock()  # Lock for the concurrent use of self.workers
 
-        # self.worker = Worker()  # System worker corresponding to this machine
+        self.worker = Worker()  # System worker corresponding to this machine
 
         self.log = log.Log('client')
 
@@ -80,8 +81,7 @@ class Client(Node):
 
                 if e.errno == 101:
                     # Network is disconnected. Local worker will be the only one used
-                    # updated_nodes.append((self.worker.load, self.worker.uri))
-                    pass
+                    updated_nodes.append((self.worker.load, self.worker.uri))
 
                 else:
                     # Timeout expired. Subnet broadcast-scanning successful.

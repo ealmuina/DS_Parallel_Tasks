@@ -1,3 +1,4 @@
+import random
 import threading
 import time
 
@@ -9,6 +10,7 @@ import utils
 class Node():
     CHECK_IP_INTERVAL = 5  # Tiempo (segundos) transcurrido el cual se verificará si la IP sigue siendo la misma.
     PYRO_TIMEOUT = 5
+    MAX_PYRO_DAEMONS = 10
 
     def __init__(self):
         self.ip = utils.get_ip()
@@ -31,10 +33,14 @@ class Node():
         if self.ip in self.daemons:
             daemon, self.uri = self.daemons[self.ip]
         else:
-            daemon = Pyro4.Daemon(host=self.ip)
+            if len(self.daemons) == Node.MAX_PYRO_DAEMONS:
+                self.daemons.pop(random.choice(list(self.daemons.keys())))
+
+            ip = self.ip
+            daemon = Pyro4.Daemon(host=ip)
             self.uri = daemon.register(self, force=True).asString()
-            self.daemons[self.ip] = (daemon, self.uri)
-            threading.Thread(target=daemon.requestLoop, daemon=True).start()
+            self.daemons[ip] = (daemon, self.uri)
+            threading.Thread(target=daemon.requestLoop, args=(lambda: ip in self.daemons,), daemon=True).start()
 
         try:
             self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
