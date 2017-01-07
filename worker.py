@@ -1,6 +1,6 @@
 import importlib
-import os
 import threading
+import time
 from collections import deque
 from datetime import datetime, timedelta
 from queue import Queue
@@ -12,9 +12,7 @@ from Pyro4 import socketutil as pyrosocket
 import log
 from node import Node
 
-# Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
-# Pyro4.config.SERVERTYPE = "multiplex"
-
+Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
@@ -41,13 +39,11 @@ class Worker(Node):
         self._total_operations = 0
         self._total_time = timedelta()
 
-        threading.Thread(target=self._listen_loop).start()
-        threading.Thread(target=self._deliver_loop).start()
+        threading.Thread(target=self._deliver_loop, daemon=True).start()
+        threading.Thread(target=self._listen_loop, daemon=True).start()
+        threading.Thread(target=self._process_loop, daemon=True).start()
 
-        for i in range(os.cpu_count()):
-            threading.Thread(target=self._process_loop).start()
-
-        self.log.report('Worker inicializado con %d hilos procesando solicitudes.' % os.cpu_count(), True)
+        self.log.report('Worker inicializado.', True)
 
     @property
     def load(self):
@@ -83,7 +79,10 @@ class Worker(Node):
 
         listener = pyrosocket.createBroadcastSocket(('', 5555))  # TODO Chequear si esto funciona cambiando de red
         while True:
-            data, address = listener.recvfrom(1024)  # TODO Removed a try block that catches ConnectionResetError
+            try:
+                data, address = listener.recvfrom(1024)
+            except ConnectionResetError:
+                continue
 
             if data.decode() == 'SCANNING':
                 listener.sendto(self.uri.encode(), address)
@@ -171,3 +170,5 @@ class Worker(Node):
 
 if __name__ == '__main__':
     worker = Worker()
+    while True:
+        time.sleep(100)

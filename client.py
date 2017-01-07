@@ -15,9 +15,7 @@ import log
 from node import Node
 from worker import Worker
 
-# Pyro4.config.COMMTIMEOUT = 5  # 5 seconds
-# Pyro4.config.SERVERTYPE = "multiplex"
-
+Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
@@ -47,8 +45,8 @@ class Client(Node):
         self.pending_subtasks_dic = {}  # Maps a tuple (task_id, index) to its corresponding pending sub-task
         self.task_number = 0  # Integer used for tasks identifiers assignment
 
-        threading.Thread(target=self._scan_loop).start()
-        threading.Thread(target=self._subtasks_checker_loop).start()
+        threading.Thread(target=self._scan_loop, daemon=True).start()
+        threading.Thread(target=self._subtasks_checker_loop, daemon=True).start()
 
         self.log.report('Cliente inicializado.', True)
 
@@ -72,8 +70,12 @@ class Client(Node):
             try:
                 scanner.sendto(b'SCANNING', ('255.255.255.255', 5555))
                 while True:
-                    uri = scanner.recv(1024).decode()  # TODO Removed a try block that catches ConnectionResetError
-                    uris.add(uri)
+                    try:
+                        uri = scanner.recv(1024).decode()
+                        uris.add(uri)
+                    except ConnectionResetError:
+                        continue
+
             except OSError as e:
                 scanner.close()
 
@@ -118,7 +120,11 @@ class Client(Node):
                                     # Invalid entry in ips.conf.
                                     continue
 
+                            try:
                                 scanner.sendto(b'SCANNING', (str(ip), 5555))
+                            except OSError:
+                                # Network is unreachable
+                                continue
 
                         # Finish reading late responses
                         scanner.settimeout(Client.SCANNER_TIMEOUT)
@@ -127,7 +133,7 @@ class Client(Node):
                                 uri = scanner.recv(1024).decode()
                                 uris.add(uri)
                             except OSError:
-                                # Timeout expired
+                                # Timeout expired or unreachable network
                                 scanner.close()
                                 break
 
@@ -162,9 +168,10 @@ class Client(Node):
         """
 
         while True:
-            if len(self.workers) == 0:
-                # No worker has been found on the system.
-                continue
+            with self.lock:
+                if len(self.workers) == 0:
+                    # No worker has been found on the system.
+                    continue
 
             t, st = self.pending_subtasks.get()
             elapsed = datetime.now() - t
@@ -187,7 +194,8 @@ class Client(Node):
                         n.process(st.func, (st.task.id, st.index), self.uri)
                         heapq.heappush(self.workers, (n.load, uri))
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri), True)
+                        print(self.workers)
 
                     except Pyro4.errors.PyroError:
                         # TimeoutError, ConnectionClosedError
@@ -224,7 +232,7 @@ class Client(Node):
         current_task.completed_subtasks += 1
         current_task.completed = current_task.completed_subtasks == len(current_task.result)
         self.log.report('Tarea %s completada al %s/100' %
-                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))))
+                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))), True)
 
         if current_task.completed:
             # Save task's result in file <current_task.id>.txt

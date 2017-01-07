@@ -12,7 +12,9 @@ class Node():
 
     def __init__(self):
         self.ip = utils.get_ip()
-        threading.Thread(target=self._ip_address_check_loop).start()
+        self.daemons = {}
+
+        threading.Thread(target=self._ip_address_check_loop, daemon=True).start()
 
         self._update_Pyro_daemon()
 
@@ -26,18 +28,13 @@ class Node():
             time.sleep(Node.CHECK_IP_INTERVAL)
 
     def _update_Pyro_daemon(self):
-        # Cerrar self.daemon si ya existía
-        try:
-            self.daemon.unregister(self)  # TODO Verificar si sera esta una solucion
-            self.daemon.shutdown()
-            # TODO Esto produce una excepcion en un hilo que el mismo crea y q no tengo forma de capturarla. WTF???
-        except AttributeError:
-            # self todavía no tiene un atributo daemon
-            pass
-
-        self.daemon = Pyro4.Daemon(host=utils.get_ip())
-        self.uri = self.daemon.register(self, force=True).asString()
-        threading.Thread(target=self.daemon.requestLoop).start()
+        if self.ip in self.daemons:
+            daemon, self.uri = self.daemons[self.ip]
+        else:
+            daemon = Pyro4.Daemon(host=self.ip)
+            self.uri = daemon.register(self, force=True).asString()
+            self.daemons[self.ip] = (daemon, self.uri)
+            threading.Thread(target=daemon.requestLoop, daemon=True).start()
 
         try:
             self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
