@@ -103,7 +103,6 @@ class Worker(Node):
                 start_time = datetime.now()
                 result = func(data, subtask_id[1])
                 self._total_time += datetime.now() - start_time
-                self._total_operations += 1
 
                 # Encolar el resultado para que sea entregado al cliente
                 self.completed_tasks.put((result, subtask_id, client_uri))
@@ -123,6 +122,7 @@ class Worker(Node):
                 self._total_time += datetime.now() - start_time
 
                 # Tarea completada y entregado el resultado. Decrementar la cantidad de tareas pendientes
+                self._total_operations += 1
                 with self.lock:
                     self.pending_tasks_count -= 1
 
