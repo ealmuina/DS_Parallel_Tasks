@@ -65,7 +65,7 @@ class Client(Node):
             scanner = pyrosocket.createBroadcastSocket(timeout=Client.SCANNER_TIMEOUT)
 
             uris = set()
-            updated_nodes = []
+            updated_workers = []
 
             try:
                 scanner.sendto(b'SCANNING', ('255.255.255.255', 5555))
@@ -81,7 +81,7 @@ class Client(Node):
 
                 if e.errno == 101:
                     # Network is disconnected. Local worker will be the only one used
-                    updated_nodes.append((self.worker.load, self.worker.uri))
+                    updated_workers.append((self.worker.load, self.worker.uri))
 
                 else:
                     # Timeout expired. Subnet broadcast-scanning successful.
@@ -142,7 +142,7 @@ class Client(Node):
                         try:
                             worker = Pyro4.Proxy(uri)
                             worker._pyroTimeout = Node.PYRO_TIMEOUT
-                            updated_nodes.append((worker.load, uri))
+                            updated_workers.append((worker.load, uri))
                         except TypeError:
                             # Invalid uri
                             continue
@@ -151,13 +151,13 @@ class Client(Node):
                             continue
 
             # Update client's knowledge of system workers
-            heapq.heapify(updated_nodes)
+            heapq.heapify(updated_workers)
             with self.lock:
                 self.workers.clear()
-                for n in updated_nodes:
+                for n in updated_workers:
                     self.workers.append(n)
 
-            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_nodes))
+            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_workers))
             time.sleep(Client.SCANNER_INTERVAL)  # rest some time before next scan
 
     def _subtasks_checker_loop(self):
@@ -169,17 +169,18 @@ class Client(Node):
 
         while True:
             with self.lock:
+                # TODO Revisar que esto arreglaba el problema de que trate de pedir un worker y el heap este vacio
                 if len(self.workers) == 0:
                     # No worker has been found on the system.
                     continue
 
             t, st = self.pending_subtasks.get()
-            elapsed = datetime.now() - t
 
             if st.completed:
                 # Sub-task is already completed. Continue iteration
                 continue
 
+            elapsed = datetime.now() - t
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
                 # Wait time exceeded, assign sub-task to a new worker
                 with self.lock:

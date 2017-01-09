@@ -52,8 +52,25 @@ def vector_mult(data, row_index):
 
 
 def load_matrices(file):
-    # TODO Implementar correctamente
-    return get_random_matrix(900, 100), get_random_matrix(100, 100)
+    f = open(file, 'r')
+    ans = []
+    for k in range(2):
+        matrix = []
+        try:
+            dimension = f.readline()
+            n, m = map(int, dimension.split())
+            for i in range(n):
+                r = []
+                row = f.readline().split()
+                for j in range(m):
+                    r.append(int(row[j]))
+                matrix.append(r)
+            ans.append(matrix)
+        except EOFError:
+            exit
+        except:
+            print('El formato de las matrices es incorrecto!!!')
+    return tuple(ans)
 
 
 if __name__ == '__main__':

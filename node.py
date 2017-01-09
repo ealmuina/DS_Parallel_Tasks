@@ -27,6 +27,12 @@ class Node():
                 self.ip = ip
                 self._update_Pyro_daemon()
 
+                try:
+                    self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
+                except AttributeError:
+                    # El nodo no tiene un log asociado
+                    pass
+
             time.sleep(Node.CHECK_IP_INTERVAL)
 
     def _update_Pyro_daemon(self):
@@ -41,9 +47,3 @@ class Node():
             self.uri = daemon.register(self, force=True).asString()
             self.daemons[ip] = (daemon, self.uri)
             threading.Thread(target=daemon.requestLoop, args=(lambda: ip in self.daemons,), daemon=True).start()
-
-        try:
-            self.log.report('Dirección IP modificada a: %s' % utils.get_ip())
-        except AttributeError:
-            # El nodo no tiene un log asociado
-            pass
