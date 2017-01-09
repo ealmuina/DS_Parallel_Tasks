@@ -9,6 +9,10 @@ tarea en el sistema sea más lenta que su ejecución en la computadora solicitan
 vectores y matrices para las cuales es adecuado el paralelismo de datos porque aplica la misma operación sobre cada uno
 de los elementos.
 
+Para el cliente una tarea consiste en una operación cualquiera entre dos matrices. Para la realización de la misma, se separa esta tarea en subtareas, una por cada fila, de forma tal que cada subtarea puede ser asignada a nodos distintos para realizarlas en paralelo. 
+-En el caso de la operación suma y resta de matrices cada subtarea consiste en la suma o resta de los elementos de las filas i-ésimas de las matrices. 
+-En el caso de la multiplicación consiste en la multiplicación de una fila de la primera matriz por la segunda matriz.
+
 La interacción del usuario con este sistema será a través de un cliente de consola, donde la interacción sea mediante
 los comandos siguientes:
 
@@ -35,10 +39,14 @@ en el sistema mediante un broadcast.
 
 Los clientes mantienen conocimiento de los nodos accesibles mediante un heap de mínimo, al que añaden cada nodo; y donde
 se emplea como criterio para comparar dos nodos, la cantidad de operaciones pendientes por ejecutar que tienen
-multiplicada por el tiempo promedio que demora en ejecutar una operación.
+multiplicada por el tiempo promedio que demora en ejecutar una operación, es decir el tiempo necesario para finalizar las operaciones pendientes y comenzar a realizar la nueva operación.
 
 Los nodos siempre están escuchando por un puerto, a la espera de que algún cliente solicite su URI, cuando esto ocurre,
 se la envían al cliente que la solicitó.
+
+Los clientes envian subtareas a los nodos integrados al sistema para que estos la realicen. Cuando los nodos terminan estas subtareas le envían el resultado al cliente que realizó la asignación.
+
+El cliente tiene constancia de la finalización de cada una de las subtareas. Cuando todas las subtareas de una tarea han sido completadas entonces devuelve el resultado de la misma. Cada subtarea tiene un timeout de forma tal que si ocurre este intervalo de tiempo y no se ha obtenido respuesta del nodo al que le fue asignada la subtarea, entonces se entiende que la subtarea no pudo ser realizada debido a algún problema y esta se asigna a un nuevo nodo.
 
 ¿Qué ocurre cuando un componente del sistema se desconecta?
 - Si el que se desconecta es un CLIENTE, todas las tareas que este había asignado a nodos del sistema, estos las
