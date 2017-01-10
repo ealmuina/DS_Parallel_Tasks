@@ -1,6 +1,6 @@
 import os
 
-import matrix
+import libmatrix
 from client import Client
 from task import Task, Subtask
 
@@ -29,7 +29,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'matrix.vector_sub' if subtract else 'matrix.vector_add')
+            st = Subtask(task, i, 'libmatrix.vector_sub' if subtract else 'libmatrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -72,7 +72,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'matrix.vector_mult')
+            st = Subtask(task, i, 'libmatrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -84,7 +84,7 @@ class MatrixClient(Client):
 
         os.makedirs('results', exist_ok=True)
         file_result = open('results/%s.txt' % task.id, 'w')
-        file_result.write(matrix.str_matrix(task.result))
+        file_result.write(libmatrix.str_matrix(task.result))
 
 
 def print_console_error(message):
@@ -100,20 +100,26 @@ if __name__ == '__main__':
         if command[0] == 'exec':
             try:
                 function, values_file = command[1:]
-                a, b = matrix.load_matrices(values_file)
-                print('Matrices cargadas. Iniciando operación...')
+                # noinspection PyBroadException
+                try:
+                    a, b = libmatrix.load_matrices(os.path.join('input', values_file))
+                    print('Matrices cargadas. Iniciando operación...')
 
-                if function == 'add':
-                    client.add(a, b)
+                    if function == 'add':
+                        client.add(a, b)
 
-                elif function == 'sub':
-                    client.sub(a, b)
+                    elif function == 'sub':
+                        client.sub(a, b)
 
-                elif function == 'mult':
-                    client.mult(a, b)
+                    elif function == 'mult':
+                        client.mult(a, b)
 
-                else:
-                    print_console_error('Función incorrecta.')
+                    else:
+                        print_console_error('Función incorrecta.')
+
+                except:
+                    print('El archivo especificado posee un error de formato. No puede contener líneas en blanco; y'
+                          ' deben aparecer dos matrices con sus dimensiones especificadas al inicio de cada una.')
 
             except ValueError:
                 print_console_error('Cantidad de argumentos incorrecta.')

@@ -101,12 +101,16 @@ class Worker(Node):
 
             if data:
                 start_time = datetime.now()
-                result = func(data, subtask_id[1])
-                self._total_time += datetime.now() - start_time
-
-                # Encolar el resultado para que sea entregado al cliente
-                self.completed_tasks.put((result, subtask_id, client_uri))
-                self.log.report('Resultado de la subtarea %s listo' % str(subtask_id))
+                try:
+                    result = func(data, subtask_id[1])
+                    self._total_time += datetime.now() - start_time
+                except Exception as e:
+                    self.log.report(
+                        'Mientras se ejecutaba la subtarea %s ocurrió una excepción: %s' % (subtask_id, type(e)))
+                else:
+                    # Encolar el resultado para que sea entregado al cliente
+                    self.completed_tasks.put((result, subtask_id, client_uri))
+                    self.log.report('Resultado de la subtarea %s listo' % str(subtask_id))
 
     def _deliver_loop(self):
         while True:

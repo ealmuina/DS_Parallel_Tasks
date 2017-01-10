@@ -168,12 +168,6 @@ class Client(Node):
         """
 
         while True:
-            with self.lock:
-                # TODO Revisar que esto arreglaba el problema de que trate de pedir un worker y el heap este vacio
-                if len(self.workers) == 0:
-                    # No worker has been found on the system.
-                    continue
-
             t, st = self.pending_subtasks.get()
 
             if st.completed:
@@ -181,10 +175,15 @@ class Client(Node):
                 continue
 
             elapsed = datetime.now() - t
+
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
                 # Wait time exceeded, assign sub-task to a new worker
-                with self.lock:
+
+                self.lock.acquire()
+
+                if len(self.workers) > 0:
                     load, uri = heapq.heappop(self.workers)
+                    self.lock.release()
                     st.time = datetime.now()
 
                     try:
@@ -193,16 +192,25 @@ class Client(Node):
                         n._pyroOneway.add('process')  # We don't need to wait for calls to n.process now
 
                         n.process(st.func, (st.task.id, st.index), self.uri)
-                        heapq.heappush(self.workers, (n.load, uri))
+                        with self.lock:
+                            # Put the worker on the list again if it isn't (maybe scanner did the job for us)
+                            found = False
+                            for w in self.workers:
+                                found = found or w[1] == uri
+                            if not found:
+                                heapq.heappush(self.workers, (n.load, uri))
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri), True)
-                        print(self.workers)
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
+                        self.log.report('Lista de workers: %s' % self.workers)
 
                     except Pyro4.errors.PyroError:
                         # TimeoutError, ConnectionClosedError
                         self.log.report(
                             'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % uri,
                             True, 'red')
+
+                else:
+                    self.lock.release()
 
             self.pending_subtasks.put((st.time, st))
 
