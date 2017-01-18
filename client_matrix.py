@@ -1,6 +1,7 @@
+import cmd
 import os
 
-import libmatrix
+import matrix
 from client import Client
 from task import Task, Subtask
 
@@ -29,7 +30,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'libmatrix.vector_sub' if subtract else 'libmatrix.vector_add')
+            st = Subtask(task, i, 'matrix.vector_sub' if subtract else 'matrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -72,7 +73,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'libmatrix.vector_mult')
+            st = Subtask(task, i, 'matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -84,49 +85,40 @@ class MatrixClient(Client):
 
         os.makedirs('results', exist_ok=True)
         file_result = open('results/%s.txt' % task.id, 'w')
-        file_result.write(libmatrix.str_matrix(task.result))
+        file_result.write(matrix.str_matrix(task.result))
 
 
-def print_console_error(message):
-    print('\x1b[0;31;48m' + message + '\x1b[0m')
+class ClientShell(cmd.Cmd):
+    prompt = ''
+
+    def __init__(self):
+        super().__init__()
+        self.client = MatrixClient()
+
+    def do_exec(self, arg):
+        try:
+            function, values_file = arg.split()
+
+            operations = {
+                'add': self.client.add,
+                'sub': self.client.sub,
+                'mult': self.client.mult
+            }
+            function = operations[function]
+
+            a, b = matrix.load_matrices(os.path.join('input', values_file))
+            print('Matrices cargadas. Iniciando operación...')
+            function(a, b)
+
+        except Exception as e:
+            print('%s: %s' % (type(e).__name__, e))
+
+    def do_stats(self, arg):
+        self.client.print_stats()
+
+    def do_exit(self, arg):
+        return -1
 
 
 if __name__ == '__main__':
-    client = MatrixClient()
-
-    while True:
-        command = input().split()
-
-        if command[0] == 'exec':
-            try:
-                function, values_file = command[1:]
-                # noinspection PyBroadException
-                try:
-                    a, b = libmatrix.load_matrices(os.path.join('input', values_file))
-                    print('Matrices cargadas. Iniciando operación...')
-
-                    if function == 'add':
-                        client.add(a, b)
-
-                    elif function == 'sub':
-                        client.sub(a, b)
-
-                    elif function == 'mult':
-                        client.mult(a, b)
-
-                    else:
-                        print_console_error('Función incorrecta.')
-
-                except:
-                    print('El archivo especificado posee un error de formato. No puede contener líneas en blanco; y'
-                          ' deben aparecer dos matrices con sus dimensiones especificadas al inicio de cada una.')
-
-            except ValueError:
-                print_console_error('Cantidad de argumentos incorrecta.')
-                print_console_error('La sintaxis es: exec <function> <values_file>.txt')
-
-        elif command[0] == 'stats':
-            client.print_stats()
-
-        else:
-            print_console_error('No se reconoce el comando %s.' % command[0])
+    ClientShell().cmdloop()

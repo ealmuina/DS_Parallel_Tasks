@@ -87,13 +87,13 @@ class Client(Node):
                     # Timeout expired. Subnet broadcast-scanning successful.
                     # Scan IP addresses read from ips.conf file if exists
 
-                    if not os.path.exists('ips.conf'):
-                        with open('ips.conf', 'w') as ips:
+                    if not os.path.exists('config/ips.conf'):
+                        with open('config/ips.conf', 'w') as ips:
                             ips.write("# You can put in this file known workers IP addresses or networks to use.\n" +
                                       "# Please don't let empty lines.")
 
                     scanner = pyrosocket.createBroadcastSocket()
-                    with open('ips.conf') as ips:
+                    with open('config/ips.conf') as ips:
                         while True:
                             read, write, error = select.select([scanner], [scanner], [scanner])
 
@@ -253,6 +253,14 @@ class Client(Node):
 
             # Remove task from pending tasks list
             self.pending_tasks.remove(current_task)
+
+    def save_result(self, task):
+        """
+        Save a task's results to a file. Not implemented as Client class is abstract.
+        :param task: Task whose results will be saved
+        """
+
+        raise NotImplementedError()
 
     def print_stats(self):
         """
