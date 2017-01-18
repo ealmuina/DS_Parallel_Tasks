@@ -88,6 +88,7 @@ class Client(Node):
                     # Scan IP addresses read from ips.conf file if exists
 
                     if not os.path.exists('config/ips.conf'):
+                        os.makedirs('results', exist_ok=True)
                         with open('config/ips.conf', 'w') as ips:
                             ips.write("# You can put in this file known workers IP addresses or networks to use.\n" +
                                       "# Please don't let empty lines.")
