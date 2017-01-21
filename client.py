@@ -1,4 +1,3 @@
-import heapq
 import threading
 from datetime import datetime
 from queue import Queue
@@ -8,6 +7,7 @@ import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
 import log
+import utils
 from node import Node
 from worker import Worker
 
@@ -29,7 +29,7 @@ class Client(Node):
     def __init__(self):
         super().__init__()
 
-        self.workers_map = {}  # Maps a worker's URI to its more recently created WorkerInfo instance
+        self.workers_map = {}  # Maps a worker's URI to its corresponding WorkerInfo instance
         self.workers = []  # WorkerInfo heap storing the information about the known system workers
         self.lock = threading.Lock()  # Lock for the concurrent use of self.workers and self.workers_map
 
@@ -66,14 +66,16 @@ class Client(Node):
                 if winfo.local_uri == self.worker._local_uri:
                     # Avoid to duplicate local worker.
                     continue
+
                 with self.lock:
                     old_winfo = self.workers_map.get(uri, None)
 
                     if old_winfo:
-                        old_winfo.expired = True
-
-                    heapq.heappush(self.workers, winfo)
-                    self.workers_map[uri] = winfo
+                        old_winfo.load = winfo.load
+                        utils.siftup(self.workers, old_winfo.index)
+                    else:
+                        self.workers_map[uri] = winfo
+                        utils.heappush(self.workers, winfo)
 
             except TypeError:
                 # Invalid uri
@@ -101,7 +103,8 @@ class Client(Node):
                 # Waiting time exceeded, assign sub-task to a new worker
 
                 with self.lock:
-                    winfo = heapq.heappop(self.workers)
+                    winfo = utils.heappop(self.workers)
+                    self.workers_map.pop(winfo.uri)
                     st.time = datetime.now()
 
                     try:
@@ -112,12 +115,11 @@ class Client(Node):
                         w.process(st.func, (st.task.id, st.index), self.uri)
 
                         # Refresh the worker's load and put it back on the list
-                        winfo = WorkerInfo(winfo.uri)
+                        winfo.load = WorkerInfo(winfo.uri).load
+                        utils.heappush(self.workers, winfo)
                         self.workers_map[winfo.uri] = winfo
-                        heapq.heappush(self.workers, winfo)
 
                         self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), winfo.uri))
-                        self.log.report('Lista de workers: %s' % self.workers)
 
                     except Pyro4.errors.PyroError:
                         # TimeoutError, ConnectionClosedError
@@ -183,9 +185,6 @@ class Client(Node):
         print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
         with self.lock:
             for winfo in self.workers:
-                if winfo.expired:
-                    continue
-
                 try:
                     n = Pyro4.Proxy(winfo.uri)
                     n._pyroTimeout = Node.PYRO_TIMEOUT
@@ -194,7 +193,7 @@ class Client(Node):
                     total_operations = n.total_operations
                     avg_time = total_time / total_operations if total_operations != 0 else 0
 
-                    print(n.ip_address, total_operations, total_time, avg_time, sep='\t')
+                    print(winfo.uri.split('@')[-1], total_operations, total_time, avg_time, sep='\t')
 
                 except Pyro4.errors.PyroError:
                     # Connection to worker couldn't be completed
@@ -216,15 +215,14 @@ class Client(Node):
 class WorkerInfo:
     def __init__(self, uri):
         """
-        Initializes a new WorkerInfo instance, which stores the load and uri of a system worker.
-        It also has a 'expired' field indicating if more recently data about that worker is already available.
+        Initialize a new WorkerInfo instance, which stores the load and uri of a system worker.
         :param uri: Pyro4 URI of the worker.
         """
 
         self.uri = uri
-        self.expired = False
+        self.index = -1
 
-        worker = Pyro4.Proxy(uri)  # Raises TypeError if uri is not valid
+        worker = Pyro4.Proxy(self.uri)  # Raises TypeError if uri is not valid
         worker._pyroTimeout = Node.PYRO_TIMEOUT
         # PyroError will be raised on failure
         self.local_uri = worker.local_uri

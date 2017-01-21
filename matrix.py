@@ -128,4 +128,4 @@ def vector_sub(data, row_index):
 
 
 if __name__ == '__main__':
-    get_random_file('test.txt', 100, 100, 100, 100)
+    get_random_file('bigfoot.txt', 10, 1000, 1000, 10000)
