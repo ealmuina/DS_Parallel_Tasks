@@ -1,4 +1,6 @@
 import importlib
+import ipaddress
+import os
 import threading
 import time
 from collections import deque
@@ -21,6 +23,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 class Worker(Node):
     MAX_CACHE_ENTRIES = 1000  # Límite de registros que puede contener la cache
     MAX_COMPLETED_TASKS = 1000  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
+    BEEP_INTERVAL = 1  # Time (seconds) elapsed between emitting beeps to the system
 
     def __init__(self):
         super().__init__()
@@ -40,7 +43,7 @@ class Worker(Node):
         self._total_time = timedelta()
 
         threading.Thread(target=self._deliver_loop, daemon=True).start()
-        threading.Thread(target=self._listen_loop, daemon=True).start()
+        threading.Thread(target=self._beep_loop, daemon=True).start()
         threading.Thread(target=self._process_loop, daemon=True).start()
 
         self.log.report('Worker inicializado.', True)
@@ -74,18 +77,51 @@ class Worker(Node):
             self.pending_tasks_count += 1
         self.pending_tasks.put((func, subtask_id, client_uri))
 
-    def _listen_loop(self):
-        """Escucha en espera de que algún cliente solicite su uri. Cuando esto ocurre, envía la uri al cliente."""
+    def _beep_loop(self):
+        """
+        Send the worker's URI in order to be detected by clients in the network
+        It broadcasts its URI on the network and to user-specified ip addresses on the 'ips.conf' file.
+        It's intended to run 'forever' on a separated thread.
+        """
 
-        listener = pyrosocket.createBroadcastSocket(('', 5555))  # TODO Chequear si esto funciona cambiando de red
         while True:
-            try:
-                data, address = listener.recvfrom(1024)
-            except ConnectionResetError:
-                continue
+            # Create a broadcast socket and send through it the word 'SCANNING'. Every worker that receive it should
+            # respond back with its URI
+            # All of the received uris will be put in a set first before further processing
 
-            if data.decode() == 'SCANNING':
-                listener.sendto(self.uri.encode(), address)
+            beeper = pyrosocket.createBroadcastSocket()
+            try:
+                # Broadcast on local network
+                beeper.sendto(self.uri.encode(), ('255.255.255.255', 5555))
+
+                # Beep IP addresses read from ips.conf file if exists
+                if not os.path.exists('config/ips.conf'):
+                    os.makedirs('results', exist_ok=True)
+                    with open('config/ips.conf', 'w') as ips:
+                        ips.write("# You can put in this file known clients IP addresses or networks that may use " +
+                                  "a worker running on this computer.")
+
+                with open('config/ips.conf') as ips:
+                    for line in ips:
+                        try:
+                            if '/' in line:
+                                # Network
+                                net = ipaddress.IPv4Network(line)
+                                ip = net.broadcast_address
+                            else:
+                                # Single ip address
+                                ip = ipaddress.ip_address(line)
+                        except ValueError:
+                            # Invalid entry in ips.conf.
+                            continue
+
+                        beeper.sendto(self.uri.encode(), (str(ip), 5555))
+            except OSError:
+                pass
+            finally:
+                beeper.close()
+
+            time.sleep(Worker.BEEP_INTERVAL)  # rest some time before next beep
 
     def _process_loop(self):
         """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""

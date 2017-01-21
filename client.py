@@ -1,9 +1,5 @@
 import heapq
-import ipaddress
-import os
-import select
 import threading
-import time
 from datetime import datetime
 from queue import Queue
 
@@ -33,10 +29,14 @@ class Client(Node):
     def __init__(self):
         super().__init__()
 
-        self.workers = []  # Accessible workers URI, prioritized by their load; stored as (load, URI)
-        self.lock = threading.Lock()  # Lock for the concurrent use of self.workers
+        self.workers_map = {}  # Maps a worker's URI to its more recently created WorkerInfo instance
+        self.workers = []  # WorkerInfo heap storing the information about the known system workers
+        self.lock = threading.Lock()  # Lock for the concurrent use of self.workers and self.workers_map
 
         self.worker = Worker()  # System worker corresponding to this machine
+        winfo = WorkerInfo(self.worker._local_uri)
+        self.workers.append(winfo)
+        self.workers_map[winfo.local_uri] = winfo
 
         self.log = log.Log('client')
 
@@ -45,123 +45,44 @@ class Client(Node):
         self.pending_subtasks_dic = {}  # Maps a tuple (task_id, index) to its corresponding pending sub-task
         self.task_number = 0  # Integer used for tasks identifiers assignment
 
-        threading.Thread(target=self._scan_loop, daemon=True).start()
-        threading.Thread(target=self._subtasks_checker_loop, daemon=True).start()
+        threading.Thread(target=self._listen_loop, daemon=True).start()
+        threading.Thread(target=self._subtasks_assign_loop, daemon=True).start()
 
         self.log.report('Cliente inicializado.', True)
 
-    def _scan_loop(self):
-        """
-        Scan the system seeking for workers, and keep updated the priority queue with them.
-        It broadcasts a known message on the network and to user-specified ip addresses on the 'ips.conf' file.
-        It's intended to run 'forever' on a separated thread.
-        """
+    def _listen_loop(self):
+        # TODO Comentar
 
+        listener = pyrosocket.createBroadcastSocket(('', 5555))  # TODO Chequear si esto funciona cambiando de red
         while True:
-            # Create a broadcast socket and send through it the word 'SCANNING'. Every worker that receive it should
-            # respond back with its URI
-            # All of the received uris will be put in a set first before further processing
-
-            scanner = pyrosocket.createBroadcastSocket(timeout=Client.SCANNER_TIMEOUT)
-
-            uris = set()
-            updated_workers = []
+            try:
+                data, address = listener.recvfrom(1024)
+                uri = data.decode()
+            except ConnectionResetError:
+                continue
 
             try:
-                scanner.sendto(b'SCANNING', ('255.255.255.255', 5555))
-                while True:
-                    try:
-                        uri = scanner.recv(1024).decode()
-                        uris.add(uri)
-                    except ConnectionResetError:
-                        continue
+                winfo = WorkerInfo(uri)
+                if winfo.local_uri == self.worker._local_uri:
+                    # Avoid to duplicate local worker.
+                    continue
+                with self.lock:
+                    old_winfo = self.workers_map.get(uri, None)
 
-            except OSError as e:
-                scanner.close()
+                    if old_winfo:
+                        old_winfo.expired = True
 
-                if e.errno == 101:
-                    # Network is disconnected. Local worker will be the only one used
-                    updated_workers.append((self.worker.load, self.worker.uri))
+                    heapq.heappush(self.workers, winfo)
+                    self.workers_map[uri] = winfo
 
-                else:
-                    # Timeout expired. Subnet broadcast-scanning successful.
-                    # Scan IP addresses read from ips.conf file if exists
+            except TypeError:
+                # Invalid uri
+                continue
+            except Pyro4.errors.PyroError:
+                # TimeoutError, ConnectionClosedError
+                continue
 
-                    if not os.path.exists('config/ips.conf'):
-                        os.makedirs('results', exist_ok=True)
-                        with open('config/ips.conf', 'w') as ips:
-                            ips.write("# You can put in this file known workers IP addresses or networks to use.\n" +
-                                      "# Please don't let empty lines.")
-
-                    scanner = pyrosocket.createBroadcastSocket()
-                    with open('config/ips.conf') as ips:
-                        while True:
-                            read, write, error = select.select([scanner], [scanner], [scanner])
-
-                            while len(read) > 0:
-                                uri = scanner.recv(1024).decode()
-                                uris.add(uri)
-                                read, write, error = select.select([scanner], [scanner], [scanner])
-
-                            if len(write) > 0:
-                                line = ips.readline()
-                                if line == '':
-                                    # ips.conf file reading completed
-                                    break
-
-                                try:
-                                    if '/' in line:
-                                        # Network
-                                        net = ipaddress.IPv4Network(line)
-                                        ip = net.broadcast_address
-                                    else:
-                                        # Single ip address
-                                        ip = ipaddress.ip_address(line)
-                                except ValueError:
-                                    # Invalid entry in ips.conf.
-                                    continue
-
-                            try:
-                                scanner.sendto(b'SCANNING', (str(ip), 5555))
-                            except OSError:
-                                # Network is unreachable
-                                continue
-
-                        # Finish reading late responses
-                        scanner.settimeout(Client.SCANNER_TIMEOUT)
-                        while True:
-                            try:
-                                uri = scanner.recv(1024).decode()
-                                uris.add(uri)
-                            except OSError:
-                                # Timeout expired or unreachable network
-                                scanner.close()
-                                break
-
-                    # Create list with tuples of found workers and their loads
-                    for uri in uris:
-                        try:
-                            worker = Pyro4.Proxy(uri)
-                            worker._pyroTimeout = Node.PYRO_TIMEOUT
-                            updated_workers.append((worker.load, uri))
-                        except TypeError:
-                            # Invalid uri
-                            continue
-                        except Pyro4.errors.PyroError:
-                            # TimeoutError, ConnectionClosedError
-                            continue
-
-            # Update client's knowledge of system workers
-            heapq.heapify(updated_workers)
-            with self.lock:
-                self.workers.clear()
-                for n in updated_workers:
-                    self.workers.append(n)
-
-            self.log.report('Sistema escaneado. Se detectaron %d workers.' % len(updated_workers))
-            time.sleep(Client.SCANNER_INTERVAL)  # rest some time before next scan
-
-    def _subtasks_checker_loop(self):
+    def _subtasks_assign_loop(self):
         """
         Check if the wait time for the result of some operation has expired.
         If this happens, the corresponding sub-task will be assigned to a new worker.
@@ -176,42 +97,33 @@ class Client(Node):
                 continue
 
             elapsed = datetime.now() - t
-
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
-                # Wait time exceeded, assign sub-task to a new worker
+                # Waiting time exceeded, assign sub-task to a new worker
 
-                self.lock.acquire()
-
-                if len(self.workers) > 0:
-                    load, uri = heapq.heappop(self.workers)
-                    self.lock.release()
+                with self.lock:
+                    winfo = heapq.heappop(self.workers)
                     st.time = datetime.now()
 
                     try:
-                        n = Pyro4.Proxy(uri)
-                        n._pyroTimeout = Node.PYRO_TIMEOUT
-                        n._pyroOneway.add('process')  # We don't need to wait for calls to n.process now
+                        w = Pyro4.Proxy(winfo.uri)
+                        w._pyroTimeout = Node.PYRO_TIMEOUT
+                        w._pyroOneway.add('process')  # We don't need to wait for calls to n.process now
 
-                        n.process(st.func, (st.task.id, st.index), self.uri)
-                        with self.lock:
-                            # Put the worker on the list again if it isn't (maybe scanner did the job for us)
-                            found = False
-                            for w in self.workers:
-                                found = found or w[1] == uri
-                            if not found:
-                                heapq.heappush(self.workers, (n.load, uri))
+                        w.process(st.func, (st.task.id, st.index), self.uri)
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), uri))
+                        # Refresh the worker's load and put it back on the list
+                        winfo = WorkerInfo(winfo.uri)
+                        self.workers_map[winfo.uri] = winfo
+                        heapq.heappush(self.workers, winfo)
+
+                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), winfo.uri))
                         self.log.report('Lista de workers: %s' % self.workers)
 
                     except Pyro4.errors.PyroError:
                         # TimeoutError, ConnectionClosedError
                         self.log.report(
-                            'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % uri,
+                            'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % winfo.uri,
                             True, 'red')
-
-                else:
-                    self.lock.release()
 
             self.pending_subtasks.put((st.time, st))
 
@@ -270,9 +182,12 @@ class Client(Node):
 
         print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
         with self.lock:
-            for load, uri in self.workers:
+            for winfo in self.workers:
+                if winfo.expired:
+                    continue
+
                 try:
-                    n = Pyro4.Proxy(uri)
+                    n = Pyro4.Proxy(winfo.uri)
                     n._pyroTimeout = Node.PYRO_TIMEOUT
 
                     total_time = n.total_time
@@ -281,8 +196,8 @@ class Client(Node):
 
                     print(n.ip_address, total_operations, total_time, avg_time, sep='\t')
 
-                except Pyro4.errors.TimeoutError:
-                    # Timeout expired. Connection to worker couldn't be completed
+                except Pyro4.errors.PyroError:
+                    # Connection to worker couldn't be completed
                     pass
 
     def get_data(self, subtask_id):
@@ -296,3 +211,24 @@ class Client(Node):
             subtask = self.pending_subtasks_dic[subtask_id]
             return subtask.task.data
         return None
+
+
+class WorkerInfo:
+    def __init__(self, uri):
+        """
+        Initializes a new WorkerInfo instance, which stores the load and uri of a system worker.
+        It also has a 'expired' field indicating if more recently data about that worker is already available.
+        :param uri: Pyro4 URI of the worker.
+        """
+
+        self.uri = uri
+        self.expired = False
+
+        worker = Pyro4.Proxy(uri)  # Raises TypeError if uri is not valid
+        worker._pyroTimeout = Node.PYRO_TIMEOUT
+        # PyroError will be raised on failure
+        self.local_uri = worker.local_uri
+        self.load = worker.load
+
+    def __lt__(self, other):
+        return self.load < other.load
