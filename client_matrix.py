@@ -20,7 +20,7 @@ class MatrixClient(Client):
         This method is intended to schedule the operation, not to return its result immediately.
         """
 
-        if len(a) != len(b):
+        if len(a) != len(b) or len(a[0]) != len(b[0]):
             raise ArithmeticError('Las dimensiones de las matrices deben coincidir.')
 
         # Create a new task

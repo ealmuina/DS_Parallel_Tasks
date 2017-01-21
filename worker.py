@@ -23,7 +23,7 @@ Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 class Worker(Node):
     MAX_CACHE_ENTRIES = 1000  # Límite de registros que puede contener la cache
     MAX_COMPLETED_TASKS = 1000  # Límite de tareas completadas pendientes de entregar a sus respectivos clientes
-    BEEP_INTERVAL = 1  # Time (seconds) elapsed between emitting beeps to the system
+    BEEP_INTERVAL = 3  # Time (seconds) elapsed between emitting beeps to the system
 
     def __init__(self):
         super().__init__()
