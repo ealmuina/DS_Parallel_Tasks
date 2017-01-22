@@ -30,7 +30,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'libraries.matrix.vector_sub' if subtract else 'libraries.matrix.vector_add')
+            st = Subtask(task, i, 'matrix.vector_sub' if subtract else 'matrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -63,7 +63,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'libraries.matrix.vector_mult')
+            st = Subtask(task, i, 'matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -114,9 +114,10 @@ class ClientShell(cmd.Cmd):
             print('%s: %s' % (type(e).__name__, e))
 
     def do_EOF(self, arg):
-        return -1
+        return self.do_exit(arg)
 
     def do_exit(self, arg):
+        self.client.close()
         return -1
 
     def do_stats(self, arg):

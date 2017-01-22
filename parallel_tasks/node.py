@@ -54,6 +54,9 @@ class Node:
             self.daemons[ip] = (daemon, self.uri)
             threading.Thread(target=daemon.requestLoop, args=(lambda: ip in self.daemons,), daemon=True).start()
 
+    def close(self):
+        raise NotImplementedError()
+
     @property
     def local_uri(self):
         return self._local_uri

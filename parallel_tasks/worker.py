@@ -1,6 +1,7 @@
 import importlib
 import ipaddress
 import os
+import shutil
 import threading
 import time
 from collections import deque
@@ -67,7 +68,7 @@ class Worker(Node):
 
                 # Beep IP addresses read from ips.conf file if exists
                 if not os.path.exists('config/ips.conf'):
-                    os.makedirs('results', exist_ok=True)
+                    os.makedirs('config')
                     with open('config/ips.conf', 'w') as ips:
                         ips.write("# You can put in this file known clients IP addresses or networks that may use " +
                                   "a worker running on this computer.")
@@ -153,20 +154,47 @@ class Worker(Node):
                 # Cliente no diponible. Dar por completada la operación
                 return None
 
+    def _load_function(self, func_path, client_uri):
+        os.makedirs('functions', exist_ok=True)
+        open('functions/__init__.py', 'w').close()
+        module, func = func_path.split('.')
+
+        try:
+            importlib.import_module('functions')
+            module = importlib.import_module('.' + module, 'functions')
+            func = getattr(module, func)
+            return func
+
+        except ImportError:
+            try:
+                client = Pyro4.Proxy(client_uri)
+                client._pyroTimeout = Node.PYRO_TIMEOUT
+                code = client.get_module(module)
+
+                with open('functions/%s.py' % module, 'w') as f:
+                    f.write(code)
+
+                if len(os.listdir('functions')) > Worker.MAX_CACHE_ENTRIES:
+                    mods = os.scandir('functions')
+                    lru = min(mods, key=lambda x: x.stat().st_atime)
+                    os.remove(lru.path)
+
+                return self._load_function(func_path, client_uri)
+
+            except Pyro4.errors.PyroError:
+                # TimeoutError, ConnectionClosedError
+                # Cliente no diponible. Dar por completada la operación
+                return None
+
     def _process_loop(self):
         """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""
 
         while True:
-            func, subtask_id, client_uri = self.pending_tasks.get()
+            func_path, subtask_id, client_uri = self.pending_tasks.get()
             data = self._get_task_data(subtask_id, client_uri)
+            func = self._load_function(func_path, client_uri)
 
-            # Cargar la función indicada por el string func
-            *module, func = func.split('.')
-            module = '.' + '.'.join(module)
-            module = importlib.import_module(module, 'parallel_tasks')
-            func = getattr(module, func)
-
-            if data:
+            if data and func:
                 start_time = datetime.now()
                 try:
                     result = func(data, subtask_id[1])
@@ -200,6 +228,10 @@ class Worker(Node):
     @property
     def total_time(self):
         return self._total_time
+
+    def close(self):
+        if os.path.exists('functions'):
+            shutil.rmtree('functions')
 
     def process(self, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""

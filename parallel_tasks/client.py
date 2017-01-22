@@ -129,6 +129,9 @@ class Client(Node):
 
             self.pending_subtasks.put((st.time, st))
 
+    def close(self):
+        self.worker.close()
+
     def get_data(self, subtask_id):
         """
         Return data corresponding to an uncompleted task.
@@ -140,6 +143,10 @@ class Client(Node):
             subtask = self.pending_subtasks_dic[subtask_id]
             return subtask.task.data
         return None
+
+    def get_module(self, module):
+        with open('parallel_tasks/libraries/%s.py' % module) as f:
+            return f.read()
 
     def print_stats(self):
         """

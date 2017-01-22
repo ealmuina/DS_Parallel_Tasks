@@ -1,14 +1,17 @@
 import argparse
-import time
 
 from parallel_tasks import client_matrix
 from parallel_tasks import worker
 
 
 def run_worker(args):
-    worker.Worker()
+    w = worker.Worker()
+    print('Type "exit" to finish.')
     while True:
-        time.sleep(100)
+        s = input()
+        if s == 'exit':
+            w.close()
+            break
 
 
 def run_client(args):
