@@ -162,8 +162,8 @@ class Worker(Node):
 
             # Cargar la función indicada por el string func
             *module, func = func.split('.')
-            module = '.'.join(module)
-            module = importlib.import_module(module)
+            module = '.' + '.'.join(module)
+            module = importlib.import_module(module, 'parallel_tasks')
             func = getattr(module, func)
 
             if data:

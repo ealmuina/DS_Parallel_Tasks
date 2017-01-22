@@ -1,8 +1,8 @@
 import cmd
 import os
 
-from libraries import matrix
 from .client import Client
+from .libraries import matrix
 from .task import Task, Subtask
 
 
