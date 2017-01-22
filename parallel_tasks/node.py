@@ -4,7 +4,7 @@ import time
 
 import Pyro4
 
-import utils
+from . import utils
 
 
 @Pyro4.expose

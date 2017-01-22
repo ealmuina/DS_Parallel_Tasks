@@ -1,9 +1,9 @@
 import cmd
 import os
 
-import matrix
-from client import Client
-from task import Task, Subtask
+from lib import matrix
+from .client import Client
+from .task import Task, Subtask
 
 
 class MatrixClient(Client):
@@ -30,7 +30,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'matrix.vector_sub' if subtract else 'matrix.vector_add')
+            st = Subtask(task, i, 'lib.matrix.vector_sub' if subtract else 'lib.matrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -43,16 +43,6 @@ class MatrixClient(Client):
         """
 
         self._add_sub(a, b)
-
-    def sub(self, a, b):
-        """
-        Subtract two matrices.
-        :param a: matrix 1
-        :param b: matrix 2
-        :return: This method is intended to schedule the operation, not to return its result immediately.
-        """
-
-        self._add_sub(a, b, True)
 
     def mult(self, a, b):
         """
@@ -73,7 +63,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'matrix.vector_mult')
+            st = Subtask(task, i, 'lib.matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -86,6 +76,16 @@ class MatrixClient(Client):
         os.makedirs('results', exist_ok=True)
         file_result = open('results/%s.txt' % task.id, 'w')
         file_result.write(matrix.str_matrix(task.result))
+
+    def sub(self, a, b):
+        """
+        Subtract two matrices.
+        :param a: matrix 1
+        :param b: matrix 2
+        :return: This method is intended to schedule the operation, not to return its result immediately.
+        """
+
+        self._add_sub(a, b, True)
 
 
 class ClientShell(cmd.Cmd):
@@ -113,12 +113,11 @@ class ClientShell(cmd.Cmd):
         except Exception as e:
             print('%s: %s' % (type(e).__name__, e))
 
-    def do_stats(self, arg):
-        self.client.print_stats()
+    def do_EOF(self, arg):
+        return -1
 
     def do_exit(self, arg):
         return -1
 
-
-if __name__ == '__main__':
-    ClientShell().cmdloop()
+    def do_stats(self, arg):
+        self.client.print_stats()

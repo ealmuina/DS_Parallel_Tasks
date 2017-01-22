@@ -2,11 +2,25 @@ import os
 import socket
 
 
-def heappush(heap, item):
-    """Push item onto heap, maintaining the heap invariant."""
-    heap.append(item)
-    item.index = len(heap) - 1
-    siftdown(heap, 0, len(heap) - 1)
+def get_ip():
+    """
+    Return the ip address of the current machine.
+    :return: String with the ip address
+    """
+
+    if os.name == 'nt':
+        return socket.gethostbyname(socket.gethostname())
+    else:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # doesn't even have to be reachable
+            s.connect(('10.255.255.255', 0))
+            ip = s.getsockname()[0]
+        except OSError:
+            ip = '127.0.0.1'
+        finally:
+            s.close()
+        return ip
 
 
 def heappop(heap):
@@ -19,6 +33,30 @@ def heappop(heap):
         siftup(heap, 0)
         return returnitem
     return lastelt
+
+
+def heappush(heap, item):
+    """Push item onto heap, maintaining the heap invariant."""
+    heap.append(item)
+    item.index = len(heap) - 1
+    siftdown(heap, 0, len(heap) - 1)
+
+
+def siftdown(heap, startpos, pos):
+    newitem = heap[pos]
+    # Follow the path to the root, moving parents down until finding a place
+    # newitem fits.
+    while pos > startpos:
+        parentpos = (pos - 1) >> 1
+        parent = heap[parentpos]
+        if newitem < parent:
+            heap[pos] = parent
+            parent.index = pos
+            pos = parentpos
+            continue
+        break
+    heap[pos] = newitem
+    newitem.index = pos
 
 
 def siftup(heap, pos):
@@ -42,44 +80,6 @@ def siftup(heap, pos):
     heap[pos] = newitem
     newitem.index = pos
     siftdown(heap, startpos, pos)
-
-
-def siftdown(heap, startpos, pos):
-    newitem = heap[pos]
-    # Follow the path to the root, moving parents down until finding a place
-    # newitem fits.
-    while pos > startpos:
-        parentpos = (pos - 1) >> 1
-        parent = heap[parentpos]
-        if newitem < parent:
-            heap[pos] = parent
-            parent.index = pos
-            pos = parentpos
-            continue
-        break
-    heap[pos] = newitem
-    newitem.index = pos
-
-
-def get_ip():
-    """
-    Return the ip address of the current machine.
-    :return: String with the ip address
-    """
-
-    if os.name == 'nt':
-        return socket.gethostbyname(socket.gethostname())
-    else:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            # doesn't even have to be reachable
-            s.connect(('10.255.255.255', 0))
-            ip = s.getsockname()[0]
-        except OSError:
-            ip = '127.0.0.1'
-        finally:
-            s.close()
-        return ip
 
 
 if __name__ == '__main__':

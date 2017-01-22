@@ -3,7 +3,7 @@ from datetime import datetime
 
 class Task:
     """
-    Represent a task. It's used to wrap a task properties.
+    Represents a task. It's used to wrap a task properties.
     """
 
     def __init__(self, length, task_id, data):
@@ -17,7 +17,7 @@ class Task:
 
 class Subtask:
     """
-    Represent a sub-task. It's used to wrap a sub-task properties.
+    Represents a sub-task. It's used to wrap a sub-task properties.
     """
 
     def __init__(self, task, index, func):

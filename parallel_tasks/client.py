@@ -6,10 +6,10 @@ import Pyro4
 import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
-import log
-import utils
-from node import Node
-from worker import Worker
+from . import log
+from . import utils
+from .node import Node
+from .worker import Worker
 
 Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
@@ -129,6 +129,40 @@ class Client(Node):
 
             self.pending_subtasks.put((st.time, st))
 
+    def get_data(self, subtask_id):
+        """
+        Return data corresponding to an uncompleted task.
+        :param subtask_id: Sub-task whose task data is requested
+        :return: data corresponding to subtask_id's task
+        """
+
+        if subtask_id in self.pending_subtasks_dic:
+            subtask = self.pending_subtasks_dic[subtask_id]
+            return subtask.task.data
+        return None
+
+    def print_stats(self):
+        """
+        Print, on console, system statistics.
+        """
+
+        print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
+        with self.lock:
+            for winfo in self.workers:
+                try:
+                    n = Pyro4.Proxy(winfo.uri)
+                    n._pyroTimeout = Node.PYRO_TIMEOUT
+
+                    total_time = n.total_time
+                    total_operations = n.total_operations
+                    avg_time = total_time / total_operations if total_operations != 0 else 0
+
+                    print(winfo.uri.split('@')[-1], total_operations, total_time, avg_time, sep='\t')
+
+                except Pyro4.errors.PyroError:
+                    # Connection to worker couldn't be completed
+                    pass
+
     def report(self, subtask_id, result):
         """
         Report to client the result of an operation already completed by some worker.
@@ -177,42 +211,12 @@ class Client(Node):
 
         raise NotImplementedError()
 
-    def print_stats(self):
-        """
-        Print, on console, system statistics.
-        """
-
-        print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
-        with self.lock:
-            for winfo in self.workers:
-                try:
-                    n = Pyro4.Proxy(winfo.uri)
-                    n._pyroTimeout = Node.PYRO_TIMEOUT
-
-                    total_time = n.total_time
-                    total_operations = n.total_operations
-                    avg_time = total_time / total_operations if total_operations != 0 else 0
-
-                    print(winfo.uri.split('@')[-1], total_operations, total_time, avg_time, sep='\t')
-
-                except Pyro4.errors.PyroError:
-                    # Connection to worker couldn't be completed
-                    pass
-
-    def get_data(self, subtask_id):
-        """
-        Return data corresponding to an uncompleted task.
-        :param subtask_id: Sub-task whose task data is requested
-        :return: data corresponding to subtask_id's task
-        """
-
-        if subtask_id in self.pending_subtasks_dic:
-            subtask = self.pending_subtasks_dic[subtask_id]
-            return subtask.task.data
-        return None
-
 
 class WorkerInfo:
+    """
+    Stores information relative to a worker. It's used to wrap a worker properties.
+    """
+
     def __init__(self, uri):
         """
         Initialize a new WorkerInfo instance, which stores the load and uri of a system worker.

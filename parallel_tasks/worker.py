@@ -11,8 +11,8 @@ import Pyro4
 import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
-import log
-from node import Node
+from . import log
+from .node import Node
 
 Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
@@ -47,35 +47,6 @@ class Worker(Node):
         threading.Thread(target=self._process_loop, daemon=True).start()
 
         self.log.report('Worker inicializado.', True)
-
-    @property
-    def load(self):
-        """Retorna la 'carga' del worker, expresada como el producto de la cantidad de operaciones que tiene pendientes
-         de completar y el tiempo promedio que demora en completar una."""
-
-        total_time = self._total_time.total_seconds()
-        avg_time = total_time / self._total_operations if self._total_operations != 0 else 1
-        with self.lock:
-            return (self.pending_tasks_count + 1) * avg_time
-
-    @property
-    def ip_address(self):
-        return self.ip
-
-    @property
-    def total_operations(self):
-        return self._total_operations
-
-    @property
-    def total_time(self):
-        return self._total_time
-
-    def process(self, func, subtask_id, client_uri):
-        """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
-
-        with self.lock:
-            self.pending_tasks_count += 1
-        self.pending_tasks.put((func, subtask_id, client_uri))
 
     def _beep_loop(self):
         """
@@ -122,31 +93,6 @@ class Worker(Node):
                 beeper.close()
 
             time.sleep(Worker.BEEP_INTERVAL)  # rest some time before next beep
-
-    def _process_loop(self):
-        """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""
-
-        while True:
-            func, subtask_id, client_uri = self.pending_tasks.get()
-            data = self._get_task_data(subtask_id, client_uri)
-
-            # Cargar la función indicada por el string func
-            module, func = func.split('.')
-            module = importlib.import_module(module)
-            func = getattr(module, func)
-
-            if data:
-                start_time = datetime.now()
-                try:
-                    result = func(data, subtask_id[1])
-                    self._total_time += datetime.now() - start_time
-                except Exception as e:
-                    self.log.report(
-                        'Mientras se ejecutaba la subtarea %s ocurrió una excepción: %s' % (subtask_id, type(e)))
-                else:
-                    # Encolar el resultado para que sea entregado al cliente
-                    self.completed_tasks.put((result, subtask_id, client_uri))
-                    self.log.report('Resultado de la subtarea %s listo' % str(subtask_id))
 
     def _deliver_loop(self):
         while True:
@@ -207,8 +153,57 @@ class Worker(Node):
                 # Cliente no diponible. Dar por completada la operación
                 return None
 
+    def _process_loop(self):
+        """Procesa las tareas pendientes y entrega sus resultados a los clientes que las solicitaron."""
 
-if __name__ == '__main__':
-    worker = Worker()
-    while True:
-        time.sleep(100)
+        while True:
+            func, subtask_id, client_uri = self.pending_tasks.get()
+            data = self._get_task_data(subtask_id, client_uri)
+
+            # Cargar la función indicada por el string func
+            *module, func = func.split('.')
+            module = '.'.join(module)
+            module = importlib.import_module(module)
+            func = getattr(module, func)
+
+            if data:
+                start_time = datetime.now()
+                try:
+                    result = func(data, subtask_id[1])
+                    self._total_time += datetime.now() - start_time
+                except Exception as e:
+                    self.log.report(
+                        'Mientras se ejecutaba la subtarea %s ocurrió una excepción: %s' % (subtask_id, type(e)))
+                else:
+                    # Encolar el resultado para que sea entregado al cliente
+                    self.completed_tasks.put((result, subtask_id, client_uri))
+                    self.log.report('Resultado de la subtarea %s listo' % str(subtask_id))
+
+    @property
+    def ip_address(self):
+        return self.ip
+
+    @property
+    def load(self):
+        """Retorna la 'carga' del worker, expresada como el producto de la cantidad de operaciones que tiene pendientes
+         de completar y el tiempo promedio que demora en completar una."""
+
+        total_time = self._total_time.total_seconds()
+        avg_time = total_time / self._total_operations if self._total_operations != 0 else 1
+        with self.lock:
+            return (self.pending_tasks_count + 1) * avg_time
+
+    @property
+    def total_operations(self):
+        return self._total_operations
+
+    @property
+    def total_time(self):
+        return self._total_time
+
+    def process(self, func, subtask_id, client_uri):
+        """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
+
+        with self.lock:
+            self.pending_tasks_count += 1
+        self.pending_tasks.put((func, subtask_id, client_uri))
