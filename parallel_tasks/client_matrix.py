@@ -1,7 +1,7 @@
 import cmd
 import os
 
-from lib import matrix
+from libraries import matrix
 from .client import Client
 from .task import Task, Subtask
 
@@ -30,7 +30,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'lib.matrix.vector_sub' if subtract else 'lib.matrix.vector_add')
+            st = Subtask(task, i, 'libraries.matrix.vector_sub' if subtract else 'libraries.matrix.vector_add')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
@@ -63,7 +63,7 @@ class MatrixClient(Client):
 
         # Create sub-tasks for operating corresponding rows on matrices
         for i in range(len(a)):
-            st = Subtask(task, i, 'lib.matrix.vector_mult')
+            st = Subtask(task, i, 'libraries.matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
             self.pending_subtasks_dic[(task.id, i)] = st
 
