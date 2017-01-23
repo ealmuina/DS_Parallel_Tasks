@@ -234,7 +234,7 @@ class Worker(Node):
 
     def close(self):
         super().close()
-        subprocess.Popen('python parallel_tasks/libraries/cleaning.py %s' % self.uri)
+        subprocess.Popen(['python', 'parallel_tasks/libraries/cleaning.py', self.uri])
 
     def process(self, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
