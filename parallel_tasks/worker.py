@@ -1,7 +1,7 @@
 import importlib
 import ipaddress
-import multiprocessing
 import os
+import subprocess
 import threading
 import time
 from collections import deque
@@ -13,7 +13,6 @@ import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
 from .libraries import log
-from .libraries import utils
 from .node import Node
 
 Pyro4.config.SERVERTYPE = "multiplex"
@@ -235,8 +234,7 @@ class Worker(Node):
 
     def close(self):
         super().close()
-        # TODO Analizar la excepcion que ocurre en el socket.__del__
-        multiprocessing.Process(target=utils.remove_temp_folder, args=(self.uri,)).start()
+        subprocess.Popen('python parallel_tasks/libraries/cleaning.py %s' % self.uri)
 
     def process(self, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""
