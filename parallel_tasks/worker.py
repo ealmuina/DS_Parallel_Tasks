@@ -1,7 +1,7 @@
 import importlib
 import ipaddress
+import multiprocessing
 import os
-import shutil
 import threading
 import time
 from collections import deque
@@ -13,6 +13,7 @@ import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
 from .libraries import log
+from .libraries import utils
 from .node import Node
 
 Pyro4.config.SERVERTYPE = "multiplex"
@@ -233,12 +234,9 @@ class Worker(Node):
         return self._total_time
 
     def close(self):
-        # TODO Analizar qué pasa si ocurre el close mientras una de las funciones eliminadas esta ejecutandose
-        wid = self.uri.split(':')[-1]
-        temp_path = '%s_temp' % wid
-
-        if os.path.exists(temp_path):
-            shutil.rmtree(temp_path)
+        super().close()
+        # TODO Analizar la excepcion que ocurre en el socket.__del__
+        multiprocessing.Process(target=utils.remove_temp_folder, args=(self.uri,)).start()
 
     def process(self, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""

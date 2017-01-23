@@ -16,7 +16,7 @@ def run_worker(args):
 
 def run_client(args):
     {
-        'matrix': client_matrix.ClientShell
+        'matrix': client_matrix.Shell
     }[args.type]().cmdloop()
 
 

@@ -55,7 +55,7 @@ class Node:
             threading.Thread(target=daemon.requestLoop, args=(lambda: ip in self.daemons,), daemon=True).start()
 
     def close(self):
-        raise NotImplementedError()
+        self.log.report('Cerrando nodo %s...' % self.uri, True, 'red')
 
     @property
     def local_uri(self):

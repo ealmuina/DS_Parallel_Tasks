@@ -88,7 +88,7 @@ class MatrixClient(Client):
         self._add_sub(a, b, True)
 
 
-class ClientShell(cmd.Cmd):
+class Shell(cmd.Cmd):
     prompt = ''
 
     def __init__(self):

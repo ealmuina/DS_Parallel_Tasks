@@ -53,36 +53,37 @@ class Client(Node):
     def _listen_loop(self):
         # TODO Comentar
 
-        listener = pyrosocket.createBroadcastSocket(('', 5555))  # TODO Chequear si esto funciona cambiando de red
-        while True:
-            try:
-                data, address = listener.recvfrom(1024)
-                uri = data.decode()
-            except ConnectionResetError:
-                continue
-
-            try:
-                winfo = WorkerInfo(uri)
-                if winfo.local_uri == self.worker._local_uri:
-                    # Avoid to duplicate local worker.
+        # TODO Chequear si esto funciona cambiando de red
+        with pyrosocket.createBroadcastSocket(('', 5555)) as listener:
+            while True:
+                try:
+                    data, address = listener.recvfrom(1024)
+                    uri = data.decode()
+                except ConnectionResetError:
                     continue
 
-                with self.lock:
-                    old_winfo = self.workers_map.get(uri, None)
+                try:
+                    winfo = WorkerInfo(uri)
+                    if winfo.local_uri == self.worker._local_uri:
+                        # Avoid to duplicate local worker.
+                        continue
 
-                    if old_winfo:
-                        old_winfo.load = winfo.load
-                        utils.siftup(self.workers, old_winfo.index)
-                    else:
-                        self.workers_map[uri] = winfo
-                        utils.heappush(self.workers, winfo)
+                    with self.lock:
+                        old_winfo = self.workers_map.get(uri, None)
 
-            except TypeError:
-                # Invalid uri
-                continue
-            except Pyro4.errors.PyroError:
-                # TimeoutError, ConnectionClosedError
-                continue
+                        if old_winfo:
+                            old_winfo.load = winfo.load
+                            utils.siftup(self.workers, old_winfo.index)
+                        else:
+                            self.workers_map[uri] = winfo
+                            utils.heappush(self.workers, winfo)
+
+                except TypeError:
+                    # Invalid uri
+                    continue
+                except Pyro4.errors.PyroError:
+                    # TimeoutError, ConnectionClosedError
+                    continue
 
     def _subtasks_assign_loop(self):
         """
@@ -130,6 +131,7 @@ class Client(Node):
             self.pending_subtasks.put((st.time, st))
 
     def close(self):
+        super().close()
         self.worker.close()
 
     def get_data(self, subtask_id):

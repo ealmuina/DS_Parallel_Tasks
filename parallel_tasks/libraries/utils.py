@@ -1,5 +1,7 @@
 import os
+import shutil
 import socket
+import time
 
 
 def get_ip():
@@ -40,6 +42,15 @@ def heappush(heap, item):
     heap.append(item)
     item.index = len(heap) - 1
     siftdown(heap, 0, len(heap) - 1)
+
+
+def remove_temp_folder(uri):
+    time.sleep(3)
+    wid = uri.split(':')[-1]
+    temp_path = '%s_temp' % wid
+
+    if os.path.exists(temp_path):
+        shutil.rmtree(temp_path)
 
 
 def siftdown(heap, startpos, pos):
