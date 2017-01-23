@@ -12,7 +12,7 @@ import Pyro4
 import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
-from . import log
+from .libraries import log
 from .node import Node
 
 Pyro4.config.SERVERTYPE = "multiplex"
@@ -155,13 +155,16 @@ class Worker(Node):
                 return None
 
     def _load_function(self, func_path, client_uri):
-        os.makedirs('functions', exist_ok=True)
-        open('functions/__init__.py', 'w').close()
+        wid = self.uri.split(':')[-1]
+        temp_path = '%s_temp' % wid
+
+        os.makedirs(temp_path, exist_ok=True)
+        open('%s/__init__.py' % temp_path, 'w').close()
         module, func = func_path.split('.')
 
         try:
-            importlib.import_module('functions')
-            module = importlib.import_module('.' + module, 'functions')
+            importlib.import_module(temp_path)
+            module = importlib.import_module('.' + module, temp_path)
             func = getattr(module, func)
             return func
 
@@ -171,11 +174,11 @@ class Worker(Node):
                 client._pyroTimeout = Node.PYRO_TIMEOUT
                 code = client.get_module(module)
 
-                with open('functions/%s.py' % module, 'w') as f:
+                with open('%s/%s.py' % (temp_path, module), 'w') as f:
                     f.write(code)
 
-                if len(os.listdir('functions')) > Worker.MAX_CACHE_ENTRIES:
-                    mods = os.scandir('functions')
+                if len(os.listdir(temp_path)) > Worker.MAX_CACHE_ENTRIES:
+                    mods = os.scandir(temp_path)
                     lru = min(mods, key=lambda x: x.stat().st_atime)
                     os.remove(lru.path)
 
@@ -230,8 +233,12 @@ class Worker(Node):
         return self._total_time
 
     def close(self):
-        if os.path.exists('functions'):
-            shutil.rmtree('functions')
+        # TODO Analizar qué pasa si ocurre el close mientras una de las funciones eliminadas esta ejecutandose
+        wid = self.uri.split(':')[-1]
+        temp_path = '%s_temp' % wid
+
+        if os.path.exists(temp_path):
+            shutil.rmtree(temp_path)
 
     def process(self, func, subtask_id, client_uri):
         """Agrega la tarea de evaluar en data la función indicada por func, a la cola de tareas pendientes."""

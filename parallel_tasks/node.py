@@ -4,7 +4,7 @@ import time
 
 import Pyro4
 
-from . import utils
+from parallel_tasks.libraries import utils
 
 
 @Pyro4.expose

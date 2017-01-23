@@ -6,8 +6,8 @@ import Pyro4
 import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
-from . import log
-from . import utils
+from .libraries import log
+from .libraries import utils
 from .node import Node
 from .worker import Worker
 

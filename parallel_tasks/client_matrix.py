@@ -3,7 +3,7 @@ import os
 
 from .client import Client
 from .libraries import matrix
-from .task import Task, Subtask
+from .libraries.task import Task, Subtask
 
 
 class MatrixClient(Client):
