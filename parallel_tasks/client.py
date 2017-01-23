@@ -22,8 +22,6 @@ class Client(Node):
     Base class to inherit from when implementing a client program for using the Parallel Tasks system.
     """
 
-    SCANNER_TIMEOUT = 1  # Time (seconds) waiting for responses on the system scanner socket
-    SCANNER_INTERVAL = 15  # Time (seconds) elapsed between system scans
     SUBTASKS_TIMEOUT = 30  # Time (seconds) waiting for assigned sub-tasks result
 
     def __init__(self):
@@ -78,11 +76,8 @@ class Client(Node):
                             self.workers_map[uri] = winfo
                             utils.heappush(self.workers, winfo)
 
-                except TypeError:
-                    # Invalid uri
-                    continue
-                except Pyro4.errors.PyroError:
-                    # TimeoutError, ConnectionClosedError
+                except (TypeError, Pyro4.errors.PyroError):
+                    # Invalid uri or TimeoutError, ConnectionClosedError
                     continue
 
     def _subtasks_assign_loop(self):
@@ -155,6 +150,7 @@ class Client(Node):
         Print, on console, system statistics.
         """
 
+        # TODO Arreglar el formato para q se imprima bien la tabla
         print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
         with self.lock:
             for winfo in self.workers:

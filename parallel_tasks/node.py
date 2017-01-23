@@ -4,7 +4,7 @@ import time
 
 import Pyro4
 
-from parallel_tasks.libraries import utils
+from .libraries import utils
 
 
 @Pyro4.expose
@@ -43,10 +43,10 @@ class Node:
 
     def _update_Pyro_daemons(self):
         if self.ip in self.daemons:
-            daemon, self.uri = self.daemons[self.ip]
+            __, self.uri = self.daemons[self.ip]
         else:
             if len(self.daemons) == Node.MAX_PYRO_DAEMONS:
-                self.daemons.pop(random.choice(list(self.daemons.keys())))
+                self.daemons.pop(random.choice(list(self.daemons.keys()).remove('127.0.0.1')))
 
             ip = self.ip
             daemon = Pyro4.Daemon(host=ip)
@@ -55,7 +55,11 @@ class Node:
             threading.Thread(target=daemon.requestLoop, args=(lambda: ip in self.daemons,), daemon=True).start()
 
     def close(self):
-        self.log.report('Cerrando nodo %s...' % self.uri, True, 'red')
+        try:
+            self.log.report('Cerrando nodo %s...' % self.uri, True, 'red')
+        except AttributeError:
+            # El nodo no tiene un log asociado
+            pass
 
     @property
     def local_uri(self):

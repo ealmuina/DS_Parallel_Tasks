@@ -29,10 +29,11 @@ class Worker(Node):
     def __init__(self):
         super().__init__()
 
-        self.log = log.Log('worker')
+        self.log = log.Log('worker')  # TODO Arreglar el nombre para q pinche con multiples workers en la misma pc
         self.pending_tasks = Queue()
         self.completed_tasks = Queue()
 
+        # TODO Considerar unificar estos dos usando un OrderedDict
         self.cache = {}
         self.cache_timer = deque()  # Conserva los registros en el orden en que fueron insertados en la cache
 
