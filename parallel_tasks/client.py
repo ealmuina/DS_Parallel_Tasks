@@ -211,7 +211,8 @@ class Client(Node):
         current_task.completed_subtasks += 1
         current_task.completed = current_task.completed_subtasks == len(current_task.result)
         self.log.report('Task %s progress is %s/100' %
-                        (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))), True)
+                        (current_task.id, round(current_task.completed_subtasks * 100 / len(current_task.result), 1)),
+                        True)
 
         if current_task.completed:
             # Save task's result in file <current_task.id>.txt
