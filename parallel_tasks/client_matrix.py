@@ -61,7 +61,7 @@ class MatrixClient(Client):
         self.pending_tasks.add(task)
         self.task_number += 1
 
-        # Create sub-tasks for operating corresponding rows on matrices
+        # Create subtasks for operating corresponding rows on matrices
         for i in range(len(a)):
             st = Subtask(task, i, 'matrix.vector_mult')
             self.pending_subtasks.put((st.time, st))
