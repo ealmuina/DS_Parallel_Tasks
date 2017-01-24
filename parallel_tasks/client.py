@@ -12,7 +12,7 @@ from .libraries import utils
 from .node import Node
 from .worker import Worker
 
-Pyro4.config.SERVERTYPE = "multiplex"
+# Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 

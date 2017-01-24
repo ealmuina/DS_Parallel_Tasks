@@ -15,7 +15,7 @@ from Pyro4 import socketutil as pyrosocket
 from .libraries import log
 from .node import Node
 
-Pyro4.config.SERVERTYPE = "multiplex"
+# Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
