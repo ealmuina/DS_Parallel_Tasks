@@ -28,7 +28,7 @@ def run_client(args):
 
 
 def generate_matrix(args):
-    matrix.get_random_file(args.filename, *args.dimensions)
+    matrix.get_random_file(args.filename, *args.dimension)
 
 
 def generate_string(args):
