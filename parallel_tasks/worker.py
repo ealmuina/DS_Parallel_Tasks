@@ -1,10 +1,10 @@
+import collections
 import importlib
 import ipaddress
 import os
 import subprocess
 import threading
 import time
-from collections import deque
 from datetime import datetime, timedelta
 from queue import Queue
 
@@ -29,13 +29,11 @@ class Worker(Node):
     def __init__(self):
         super().__init__()
 
-        self.log = log.Log('worker')  # TODO Arreglar el nombre para q pinche con multiples workers en la misma pc
+        self.log = log.Log('worker_%s' % self.uri.split(':')[-1])
         self.pending_tasks = Queue()
         self.completed_tasks = Queue()
 
-        # TODO Considerar unificar estos dos usando un OrderedDict
-        self.cache = {}
-        self.cache_timer = deque()  # Conserva los registros en el orden en que fueron insertados en la cache
+        self.cache = collections.OrderedDict()
 
         self.pending_tasks_count = 0  # Total de operaciones pendientes
         self.lock = threading.Lock()  # Lock para el uso de self.pending_tasks_count
@@ -134,6 +132,7 @@ class Worker(Node):
         key = (task_id, client_uri)
 
         if key in self.cache:
+            self.cache.move_to_end(key)
             return self.cache[key]
 
         else:
@@ -143,10 +142,8 @@ class Worker(Node):
                 data = client.get_data(subtask_id)
 
                 if len(self.cache) > Worker.MAX_CACHE_ENTRIES:
-                    d = self.cache_timer.pop()
-                    self.cache.pop(d)
+                    self.cache.popitem(False)  # False to remove the LRU entry
 
-                self.cache_timer.appendleft(task_id)
                 self.cache[key] = data
                 return data
 

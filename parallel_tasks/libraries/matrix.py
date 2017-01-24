@@ -22,6 +22,7 @@ def _vector_add_sub(data, row_index, subtract=False):
 
 
 def get_random_file(filename, n1, m1, n2, m2):
+    os.makedirs('input', exist_ok=True)
     with open(os.path.join('input', filename), 'w') as f:
         matrix1 = get_random_matrix(n1, m1)
         matrix2 = get_random_matrix(n2, m2)

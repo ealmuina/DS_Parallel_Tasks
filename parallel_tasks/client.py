@@ -6,6 +6,7 @@ import Pyro4
 import Pyro4.errors
 from Pyro4 import socketutil as pyrosocket
 
+from .libraries import heapq
 from .libraries import log
 from .libraries import utils
 from .node import Node
@@ -71,10 +72,10 @@ class Client(Node):
 
                         if old_winfo:
                             old_winfo.load = winfo.load
-                            utils.siftup(self.workers, old_winfo.index)
+                            heapq.siftup(self.workers, old_winfo.index)
                         else:
                             self.workers_map[uri] = winfo
-                            utils.heappush(self.workers, winfo)
+                            heapq.heappush(self.workers, winfo)
 
                 except (TypeError, Pyro4.errors.PyroError):
                     # Invalid uri or TimeoutError, ConnectionClosedError
@@ -99,7 +100,7 @@ class Client(Node):
                 # Waiting time exceeded, assign sub-task to a new worker
 
                 with self.lock:
-                    winfo = utils.heappop(self.workers)
+                    winfo = heapq.heappop(self.workers)
                     self.workers_map.pop(winfo.uri)
                     st.time = datetime.now()
 
@@ -112,7 +113,7 @@ class Client(Node):
 
                         # Refresh the worker's load and put it back on the list
                         winfo.load = WorkerInfo(winfo.uri).load
-                        utils.heappush(self.workers, winfo)
+                        heapq.heappush(self.workers, winfo)
                         self.workers_map[winfo.uri] = winfo
 
                         self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), winfo.uri))
@@ -147,11 +148,11 @@ class Client(Node):
 
     def print_stats(self):
         """
-        Print, on console, system statistics.
+        Print system statistics on console.
         """
 
-        # TODO Arreglar el formato para q se imprima bien la tabla
-        print('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio', sep='\t')
+        table = [('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio')]
+
         with self.lock:
             for winfo in self.workers:
                 try:
@@ -162,11 +163,14 @@ class Client(Node):
                     total_operations = n.total_operations
                     avg_time = total_time / total_operations if total_operations != 0 else 0
 
-                    print(winfo.uri.split('@')[-1], total_operations, total_time, avg_time, sep='\t')
+                    row = (winfo.uri.split('@')[-1], total_operations, total_time, avg_time)
+                    table.append(tuple(map(str, row)))
 
                 except Pyro4.errors.PyroError:
                     # Connection to worker couldn't be completed
-                    pass
+                    continue
+
+        utils.print_table(table)
 
     def report(self, subtask_id, result):
         """

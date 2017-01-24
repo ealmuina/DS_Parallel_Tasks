@@ -56,7 +56,7 @@ class Node:
 
     def close(self):
         try:
-            self.log.report('Cerrando nodo %s...' % self.uri, True, 'red')
+            self.log.report('Cerrando nodo %s...' % self.uri, True)
         except AttributeError:
             # El nodo no tiene un log asociado
             pass
