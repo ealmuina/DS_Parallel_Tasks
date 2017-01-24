@@ -12,7 +12,7 @@ from .libraries import utils
 from .node import Node
 from .worker import Worker
 
-# Pyro4.config.SERVERTYPE = "multiplex"
+Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
@@ -30,7 +30,7 @@ class Client(Node):
 
         self.workers_map = {}  # Maps a worker's URI to its corresponding WorkerInfo instance
         self.workers = []  # WorkerInfo heap storing the information about the known system workers
-        self.lock = threading.Lock()  # Lock for the concurrent use of self.workers and self.workers_map
+        self.workers_lock = threading.Lock()  # Lock for the concurrent use of self.workers and self.workers_map
 
         self.worker = Worker()  # System worker corresponding to this machine
         winfo = WorkerInfo(self.worker._local_uri)
@@ -69,7 +69,7 @@ class Client(Node):
                         # Avoid to duplicate local worker.
                         continue
 
-                    with self.lock:
+                    with self.workers_lock:
                         # Save or update information about the worker
                         old_winfo = self.workers_map.get(uri, None)
 
@@ -106,7 +106,7 @@ class Client(Node):
             if elapsed.total_seconds() > Client.SUBTASKS_TIMEOUT:
                 # Waiting time exceeded, assign sub-task to a new worker
 
-                with self.lock:
+                with self.workers_lock:
                     winfo = heapq.heappop(self.workers)
                     self.workers_map.pop(winfo.uri)
 
@@ -164,9 +164,9 @@ class Client(Node):
         Print system statistics on console.
         """
 
-        table = [('Worker', 'Operaciones', 'Tiempo total', 'Tiempo promedio')]
+        table = [('Worker', 'Operations', 'Total time', 'Average time')]
 
-        with self.lock:
+        with self.workers_lock:
             for winfo in self.workers:
                 try:
                     n = Pyro4.Proxy(winfo.uri)
@@ -207,7 +207,7 @@ class Client(Node):
         # Copy sub-task result to the corresponding task's one
         current_task.result[subtask.index] = result
 
-        # Verify is task is now completed
+        # Verify if task is now completed
         current_task.completed_subtasks += 1
         current_task.completed = current_task.completed_subtasks == len(current_task.result)
         self.log.report('Task %s progress is %s/100' %

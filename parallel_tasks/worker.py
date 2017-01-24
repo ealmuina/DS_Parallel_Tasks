@@ -15,7 +15,7 @@ from Pyro4 import socketutil as pyrosocket
 from .libraries import log
 from .node import Node
 
-# Pyro4.config.SERVERTYPE = "multiplex"
+Pyro4.config.SERVERTYPE = "multiplex"
 Pyro4.config.SERIALIZER = 'pickle'
 Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
 
@@ -46,7 +46,7 @@ class Worker(Node):
         threading.Thread(target=self._beep_loop, daemon=True).start()
         threading.Thread(target=self._process_loop, daemon=True).start()
 
-        self.log.report('Worker inicializado.', True)
+        self.log.report('Initialized worker.', True)
 
     def _beep_loop(self):
         """
@@ -248,8 +248,7 @@ class Worker(Node):
 
         total_time = self._total_time.total_seconds()
         avg_time = total_time / self._total_operations if self._total_operations != 0 else 1
-        with self.lock:
-            return (self.pending_tasks_count + 1) * avg_time
+        return (self.pending_tasks_count + 1) * avg_time
 
     @property
     def total_operations(self):
