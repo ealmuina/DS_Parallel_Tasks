@@ -107,7 +107,7 @@ class Shell(cmd.Cmd):
             function = operations[function]
 
             a, b = matrix.load_matrices(os.path.join('input', values_file))
-            print('Loaded matrices. Starting operation...')
+            self.client.log.report('Loaded matrices. Starting operation...', True)
             function(a, b)
 
         except Exception as e:
