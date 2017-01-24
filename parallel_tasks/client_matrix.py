@@ -21,7 +21,7 @@ class MatrixClient(Client):
         """
 
         if len(a) != len(b) or len(a[0]) != len(b[0]):
-            raise ArithmeticError('Las dimensiones de las matrices deben coincidir.')
+            raise ArithmeticError('Matrices dimensions must be the same.')
 
         # Create a new task
         task = Task(len(a), self.task_number, (a, b))
@@ -54,7 +54,7 @@ class MatrixClient(Client):
 
         if len(a[0]) != len(b):
             raise ArithmeticError(
-                "La cantidad de columnas de la matriz 'a' debe coincidir con la cantidad de filas de 'b'.")
+                "Matrix 'a' number of columns must be equal to matrix 'b' number of rows.")
 
         # Create a new task
         task = Task(len(a), self.task_number, (a, b))
@@ -107,7 +107,7 @@ class Shell(cmd.Cmd):
             function = operations[function]
 
             a, b = matrix.load_matrices(os.path.join('input', values_file))
-            print('Matrices cargadas. Iniciando operación...')
+            print('Loaded matrices. Starting operation...')
             function(a, b)
 
         except Exception as e:

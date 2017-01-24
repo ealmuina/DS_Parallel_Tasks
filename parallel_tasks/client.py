@@ -23,7 +23,7 @@ class Client(Node):
     Base class to inherit from when implementing a client program for using the Parallel Tasks system.
     """
 
-    SUBTASKS_TIMEOUT = 30  # Time (seconds) waiting for assigned sub-tasks result
+    SUBTASKS_TIMEOUT = 30  # Time (seconds) waiting for assigned subtasks's result
 
     def __init__(self):
         super().__init__()
@@ -47,12 +47,14 @@ class Client(Node):
         threading.Thread(target=self._listen_loop, daemon=True).start()
         threading.Thread(target=self._subtasks_assign_loop, daemon=True).start()
 
-        self.log.report('Cliente inicializado.', True)
+        self.log.report('Initialized client.', True)
 
     def _listen_loop(self):
-        # TODO Comentar
+        """
+        Listen to the network waiting for workers URIs.
+        It's intended to run 'forever' on a separated thread.
+        """
 
-        # TODO Chequear si esto funciona cambiando de red
         with pyrosocket.createBroadcastSocket(('', 5555)) as listener:
             while True:
                 try:
@@ -68,14 +70,19 @@ class Client(Node):
                         continue
 
                     with self.lock:
+                        # Save or update information about the worker
                         old_winfo = self.workers_map.get(uri, None)
 
                         if old_winfo:
+                            # It's an 'old known' worker, just update its info
                             old_winfo.load = winfo.load
                             heapq.siftup(self.workers, old_winfo.index)
                         else:
+                            # New worker we didn't knew about!
                             self.workers_map[uri] = winfo
                             heapq.heappush(self.workers, winfo)
+
+                    self.log.report('Received beep from worker %s.' % winfo.uri)
 
                 except (TypeError, Pyro4.errors.PyroError):
                     # Invalid uri or TimeoutError, ConnectionClosedError
@@ -102,7 +109,6 @@ class Client(Node):
                 with self.lock:
                     winfo = heapq.heappop(self.workers)
                     self.workers_map.pop(winfo.uri)
-                    st.time = datetime.now()
 
                     try:
                         w = Pyro4.Proxy(winfo.uri)
@@ -110,18 +116,19 @@ class Client(Node):
                         w._pyroOneway.add('process')  # We don't need to wait for calls to n.process now
 
                         w.process(st.func, (st.task.id, st.index), self.uri)
+                        st.time = datetime.now()
 
                         # Refresh the worker's load and put it back on the list
                         winfo.load = WorkerInfo(winfo.uri).load
                         heapq.heappush(self.workers, winfo)
                         self.workers_map[winfo.uri] = winfo
 
-                        self.log.report('Asignada la subtarea %s al worker %s' % ((st.task.id, st.index), winfo.uri))
+                        self.log.report('Subtask %s assigned to worker %s' % ((st.task.id, st.index), winfo.uri))
 
                     except Pyro4.errors.PyroError:
                         # TimeoutError, ConnectionClosedError
                         self.log.report(
-                            'Se intentó enviar subtarea al worker %s, pero no se encuentra accesible.' % winfo.uri,
+                            "Attempted to assign subtask to worker %s, but it couldn't be accessed." % winfo.uri,
                             True, 'red')
 
             self.pending_subtasks.put((st.time, st))
@@ -143,6 +150,12 @@ class Client(Node):
         return None
 
     def get_module(self, module):
+        """
+        Return python module as a string.
+        :param module: Module's name without the .py extension
+        :return: string with the entire module's content
+        """
+
         with open('parallel_tasks/libraries/%s.py' % module) as f:
             return f.read()
 
@@ -185,11 +198,10 @@ class Client(Node):
             subtask = self.pending_subtasks_dic.pop(subtask_id)
         except KeyError:
             self.log.report(
-                'Un worker reportó el resultado de una operación ya completada. La respuesta será desechada.')
-            return None
+                'A worker reported the result of an already completed operation. It will be dismissed.', True)
+            return None  # to finish call
 
         subtask.completed = True
-
         current_task = subtask.task
 
         # Copy sub-task result to the corresponding task's one
@@ -198,7 +210,7 @@ class Client(Node):
         # Verify is task is now completed
         current_task.completed_subtasks += 1
         current_task.completed = current_task.completed_subtasks == len(current_task.result)
-        self.log.report('Tarea %s completada al %s/100' %
+        self.log.report('Task %s progress is %s/100' %
                         (current_task.id, (current_task.completed_subtasks * 100 / len(current_task.result))), True)
 
         if current_task.completed:
@@ -206,7 +218,7 @@ class Client(Node):
             self.save_result(current_task)
 
             self.log.report(
-                'Tarea %(id)s completada. Puede ver el resultado en el archivo %(id)s.txt.\nTiempo total: %(time)s'
+                'Task %(id)s completed. You can check the result at the file %(id)s.txt.\nTotal time: %(time)s'
                 % {'id': current_task.id, 'time': datetime.now() - current_task.time}, True, 'green')
 
             # Remove task from pending tasks list
@@ -217,7 +229,6 @@ class Client(Node):
         Save a task's results to a file. Not implemented as Client class is abstract.
         :param task: Task whose results will be saved
         """
-
         raise NotImplementedError()
 
 
