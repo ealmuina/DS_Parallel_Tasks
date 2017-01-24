@@ -1,7 +1,8 @@
 import argparse
 
 import parallel_tasks.libraries.matrix as matrix
-from parallel_tasks import client_matrix
+import parallel_tasks.libraries.string as string
+from parallel_tasks import client_matrix, client_string
 from parallel_tasks import worker
 
 
@@ -21,12 +22,17 @@ def run_worker(args):
 
 def run_client(args):
     {
-        'matrix': client_matrix.Shell
+        'matrix': client_matrix.Shell,
+        'string': client_string.Shell
     }[args.type]().cmdloop()
 
 
-def generate(args):
+def generate_matrix(args):
     matrix.get_random_file(args.filename, *args.dimensions)
+
+
+def generate_string(args):
+    string.get_random_file(args.filename, args.length)
 
 
 if __name__ == '__main__':
@@ -42,11 +48,17 @@ if __name__ == '__main__':
     parser_client.add_argument('--type', default='matrix')
     parser_client.set_defaults(func=run_client)
 
-    # Subparser for the 'generate' command
-    parser_generate = subparsers.add_parser('generate')
-    parser_generate.add_argument('filename')
-    parser_generate.add_argument('dimensions', type=int, nargs=4)
-    parser_generate.set_defaults(func=generate)
+    # Subparser for the 'generate_matrix' command
+    parser_matrix = subparsers.add_parser('gen_matrix')
+    parser_matrix.add_argument('filename')
+    parser_matrix.add_argument('dimension', type=int, nargs=4)
+    parser_matrix.set_defaults(func=generate_matrix)
+
+    # Subparser for the 'generate_string' command
+    parser_matrix = subparsers.add_parser('gen_string')
+    parser_matrix.add_argument('filename')
+    parser_matrix.add_argument('length', type=int)
+    parser_matrix.set_defaults(func=generate_string)
 
     args = parser.parse_args()
     args.func(args)
